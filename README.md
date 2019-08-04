@@ -1,5 +1,7 @@
 # Tics
 
-Tics Real-time Kernel / RTOS
+Tics Real-time Kernel / RTOS.
 
-See the sample source code, documentation will be added later.
+C++ based real-time kernel / RTOS.
+
+See the sample source code. Documentation will be added later.
