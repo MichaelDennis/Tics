@@ -59,20 +59,20 @@ SOFTWARE.
 
 #define SaveRegisters()                             \
     __asm {                                         \
-        __asm pushad			        			\
+        __asm pushad			            \
     }
 
 #define RestoreRegisters()                          \
     __asm {                                         \
-	    __asm popad				    				\
+	    __asm popad				    \
     }
 
-#define SetStackPointer(variable)	     		    \
+#define SetStackPointer(variable)                   \
     __asm {                                         \
-	    __asm mov esp, variable			    	    \
+	    __asm mov esp, variable	            \
     }
 
-#define GetStackPointer(variable)   				\
+#define GetStackPointer(variable)   		    \
     __asm {                                         \
         __asm mov variable, esp                     \
     }
