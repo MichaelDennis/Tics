@@ -53,7 +53,7 @@ SOFTWARE.
 // Typedefs
 //-----------------------------------------------------------------------------
 typedef unsigned int StackType;
-typedef unsigned long long TimerTickType;
+typedef unsigned int TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -120,7 +120,7 @@ namespace TicsNameSpace {
         ErrorMsgToUnlinkIsNotInTheList2 = 1013,
         ErrorMsgToUnlinkIsInTheWrongList = 1014,
         ErrorUnlinkListIdFailure = 1015,
-        ErrorAttempToUnlinkHeadOrTail = 1016,
+        ErrorAttemptToUnlinkHeadOrTail = 1016,
         ErrorMsgChecksumFailure = 1017,
         ErrorCannotAddAMsgToAFullList = 1018,
         ErrorCannotAddANullMsg = 1019,
@@ -132,7 +132,7 @@ namespace TicsNameSpace {
         ErrorCouldNotAllocateMemory = 1025,
         ErrorByteAllocationRequestMustBeInMultiplesOfWords = 1026,
         ErrorDeAllocationSignatureMismatch = 1027,
-        ErrorAttempToDeAllocateToTheWrongPool = 1028,
+        ErrorAttemptToDeallocateToTheWrongPool = 1028,
         ErrorDefaultStackSizeOutOfRange = 1029,
         ErrorCurrentSpIsBelowStackBottom = 1030,
         ErrorCurrentSpIsAboveStackTop = 1031,
@@ -162,7 +162,7 @@ namespace TicsNameSpace {
         ErrorReceiverTaskPtrIsNullInSend = 1055,
         ErrorReceiverTaskDoesNotExistInSendSafetyChecks = 1056,
         ErrorTaskDoesNotExist = 1057,
-        ErrorMusthaveAtLeastTwoFifoSlots = 1058,
+        ErrorMustHaveAtLeastTwoFifoSlots = 1058,
         ErrorCannotAllocateFifoMemory = 1059,
         ErrorAttemptToAddToAFullFifo = 1060,
         ErrorTaskIdMismatch = 1061,
@@ -281,8 +281,8 @@ class MsgClass : public NodeClass {
 public:
     int ReceiverId;
     int MsgNum;
-    int Delay;
-    TimerTickType EndTime;
+    int StartingDelay;
+    int RunningDelay;
     TaskClass* Sender;
     TaskClass* Receiver;
 
@@ -297,7 +297,7 @@ public:
         int msgNum = StartMsg,
         int data = 0,
         void* ptr = 0,
-        int delay = 0,
+        int startingDelay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -400,11 +400,21 @@ public:
 class DelayListClass : public MsgListClass {
 public:
     // Data
-    TimerTickType LastTime;
+
+    enum LastTimeStateEnum {
+        LastTimeStateInvalid,
+        LastTimeStateValid
+    };
+
+    TimerTickType LastTime = 0;
+    LastTimeStateEnum LastTimeState = LastTimeStateInvalid;
 
     // Functions
+    ~DelayListClass() {}
     void AddByDelay(MsgClass* a);
     void CheckForTimeouts();
+    void AddByDelayDt(MsgClass* a);
+    void CheckForTimeoutsDt();
 };
 
 class StackClass {
@@ -530,7 +540,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int delay = 0,
+        int startingDelay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -539,7 +549,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int delay = 0,
+        int startingDelay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -550,7 +560,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int delay = 0,
+        int startingDelay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -605,7 +615,7 @@ public:
 class ErrorHandlerClass {
 public:
     // Data
-    int ErrorNum;
+    int ErrorNum = 0;
 
     // Functions
     void Report(int errorNum = 0);
@@ -839,3 +849,5 @@ public:
 // End guard
 //-----------------------------------------------------------------------------
 #endif				// TicsGuard
+
+
