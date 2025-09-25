@@ -35,6 +35,7 @@ SOFTWARE.
 // Includes
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
+#include <stdint.h>
 
 //-----------------------------------------------------------------------------
 // typedefs
@@ -53,7 +54,7 @@ SOFTWARE.
 // Typedefs
 //-----------------------------------------------------------------------------
 typedef unsigned int StackType;
-typedef unsigned int TimerTickType;
+typedef int32_t TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -281,8 +282,8 @@ class MsgClass : public NodeClass {
 public:
     int ReceiverId;
     int MsgNum;
-    int StartingDelay;
-    int RunningDelay;
+    TimerTickType Delay;
+    TimerTickType EndTime;
     TaskClass* Sender;
     TaskClass* Receiver;
 
@@ -297,7 +298,7 @@ public:
         int msgNum = StartMsg,
         int data = 0,
         void* ptr = 0,
-        int startingDelay = 0,
+        int delay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -400,21 +401,12 @@ public:
 class DelayListClass : public MsgListClass {
 public:
     // Data
-
-    enum LastTimeStateEnum {
-        LastTimeStateInvalid,
-        LastTimeStateValid
-    };
-
-    TimerTickType LastTime = 0;
-    LastTimeStateEnum LastTimeState = LastTimeStateInvalid;
+    TimerTickType LastTime;
 
     // Functions
-    ~DelayListClass() {}
     void AddByDelay(MsgClass* a);
-    void CheckForTimeouts();
     void AddByDelayDt(MsgClass* a);
-    void CheckForTimeoutsDt();
+    void CheckForTimeouts();
 };
 
 class StackClass {
@@ -540,7 +532,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int startingDelay = 0,
+        int delay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -549,7 +541,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int startingDelay = 0,
+        int delay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -560,7 +552,7 @@ public:
         int msgNum = NullMsg,
         int data = 0,
         void* ptr = 0,
-        int startingDelay = 0,
+        int delay = 0,
         int priority = MediumPriority,
         TaskClass* sender = 0);
 
@@ -615,7 +607,7 @@ public:
 class ErrorHandlerClass {
 public:
     // Data
-    int ErrorNum = 0;
+    int ErrorNum;
 
     // Functions
     void Report(int errorNum = 0);
@@ -849,5 +841,3 @@ public:
 // End guard
 //-----------------------------------------------------------------------------
 #endif				// TicsGuard
-
-

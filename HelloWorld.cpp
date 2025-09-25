@@ -102,6 +102,8 @@ class HelloTaskClass : public TaskClass {
 public:
     // Functions
     void Task();
+    MsgClass * CheckForMsgs(void);
+    void PrintDelayList();
 };
 
 //-----------------------------------------------------------------------------
@@ -109,24 +111,49 @@ public:
 //-----------------------------------------------------------------------------
 HelloTaskClass * HelloTask;
 
+MsgClass * HelloTaskClass::CheckForMsgs(void)
+{
+    int i = 0;
+    MsgClass * msg = 0;
+
+    msg = Recv();
+    i++;
+
+    switch (msg->MsgNum) {
+
+        case 1000:
+        cout << "1000 " << i << "\n";
+        break;
+
+        case 1001:
+        cout << "2000 " << i << "\n";
+        break;
+
+        case 1002:
+        cout << "4000 " << i << "\n";
+        break;
+    }
+
+    return msg;
+}
+
 //-----------------------------------------------------------------------------
 // Implement the Hello Task function.
 //-----------------------------------------------------------------------------
 void HelloTaskClass::Task(void)
 {
     int i = 0;
+    MsgClass * msg;
 
     int oneSecond = CLOCKS_PER_SEC;
+
+    cout << "CLOCKS_PER_SEC = " << CLOCKS_PER_SEC << endl;
 
     // The task body is always an infinite loop.
 
     for (;;) {
-
-        // Write to the screen.
-        cout << "Hello World! " << i++ << endl;
-
-        // Now wait a second before we write again.
-        Pause(oneSecond);
+        cout << "Hello " << i++ << endl;
+        Pause(CLOCKS_PER_SEC);
     }
 }
 

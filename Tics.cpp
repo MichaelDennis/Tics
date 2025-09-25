@@ -41,12 +41,12 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 #include <time.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "Tics.hpp"
 #include "TicsTaskSwitch.hpp"
 #include <iostream>
 
 using namespace std;
-using namespace TicsNameSpace;
 
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
@@ -624,7 +624,7 @@ void DelayListClass::AddByDelay(MsgClass* a)
         b = (MsgClass*)node;
 
         // Insert msg a in front of msg b if its end time is sooner.
-        if (a->StartingDelay < b->StartingDelay) {
+        if (a->EndTime < b->EndTime) {
             break;
         }
     }
@@ -634,22 +634,18 @@ void DelayListClass::AddByDelay(MsgClass* a)
     // which is the last msg in the list. This is the case when the list 
     // is empty, or a->EndTime is greater than every msg in the list.
     Insert(a, b->Prev);
-
-    // If b is not the tail, adjust the RunningDelay for msg b.
-   if (!IsTail(b)) {
-        b->RunningDelay -= a->StartingDelay;
-   }
-    
 }
 
 //-----------------------------------------------------------------------------
 /// \brief Check for delayed msgs that are ready to be sent.
 ///
-/// Delayed msgs are msgs that will be sent out at a later time.
-/// msg->Delay contains the delay in units of system of clock ticks,
-/// returned from ReadTickCount().
-/// Delayed msgs are held in the Delay List. This function scans the Delay
-/// List, and sends out all msgs whose Delay field is less than or equal to 0.
+/// Delayed msgs are msgs that will be sent out at a later time, designated by
+/// the msg EndTime field. The EndTime field is in units of system ticks (see
+/// the function ReadTickCount()). Delayed msgs are held in the Delay List.
+/// This function scans the Delay List, and sends out any msgs whose EndTime
+/// is past the current time.
+/// 
+/// We assume a 64-bit counter, 
 //-----------------------------------------------------------------------------
 void DelayListClass::CheckForTimeouts()
 {
@@ -658,31 +654,21 @@ void DelayListClass::CheckForTimeouts()
     MsgClass* msg;
     MsgClass* nextMsg;
     TimerTickType currentTime;
-    TimerTickType dt;
 
     // If the list is empty, we have no timers to process.
     if (IsEmpty()) {
         return;
     }
-
+    
     // Read the current clock tick.
     currentTime = ReadTickCount();
 
-    // Initialize LastTime if necessary.
-    if (LastTimeState == LastTimeStateInvalid) {
-        LastTime = currentTime;
-        LastTimeState = LastTimeStateValid;
-    }
-
-    // Compute the number of ticks since the last time we were here.
-    dt = currentTime - LastTime;
-        
     // If there is no time change, there is no need to check for expired timers.
-    if (dt == 0) {
+    if (LastTime == currentTime) {
         return;
     }
 
-    // Okay, the clock has advanced. Look for delayed msgs that are ready to be sent.
+    // Look for delayed msgs that are ready to be sent.
     for (node = Head->Next; node != Tail; node = nextNode) {
 
         // If the msg is timed out, it will be removed from the list, and added to
@@ -697,20 +683,22 @@ void DelayListClass::CheckForTimeouts()
         // Get the next msg.
         nextMsg = (MsgClass*)nextNode;
 
-        // Decrement the running timer.
-        msg->RunningDelay -= dt;
-
         // If we're past the delayed msg end time, then dispatch it.
-        if (msg->RunningDelay <= 0) {
+        if (currentTime >= msg->EndTime) {
             // Remove the delayed msg from the delay list.
             Remove(msg);
 
             // Add the delayed msg to the Ready List.
             ReadyList.AddByPriority(msg);
-        }
-         else {
-                // If there are no more timeouts then break.
+
+            // If there are no other timed-out msgs, then exit.
+            // Remember, the msgs are sorted by the end time, so if
+            // the next msg has not timed out, then no other msg in the list
+            // is timed out either. Note: if nextMsg is the Tail, then the
+            // if condition will always fail, since EndTime is initialized to 0.
+            if (currentTime < nextMsg->EndTime) {
                 break;
+            }
         }
     }
     // Save for the next time we enter this function.
@@ -1554,22 +1542,19 @@ void TaskClass::Yield()
 /// \param priority - The priority of the reply msg.
 /// \param sender - The sender of the reply (used for aliasing).
 //-----------------------------------------------------------------------------
-void TaskClass::Reply(MsgClass* receivedMsg, int msgNum, int data, void* ptr, int priority, int startingDelay, TaskClass* sender)
+void TaskClass::Reply(MsgClass* receivedMsg, int msgNum, int data, void* ptr, int delay, int priority, TaskClass* sender)
 {
     // Reply by sending a msg to the sender of the received msg.
-    Send(receivedMsg->Sender, msgNum, data, ptr, priority, startingDelay, sender);
+    Send(receivedMsg->Sender, msgNum, data, ptr, delay, priority, sender);
 }
 
 //-----------------------------------------------------------------------------
 /// \brief Initialize a MsgClass object.
 //-----------------------------------------------------------------------------
 void MsgClass::Init()
-{
-    // Remember the receiver task id. Used for error checking.
+{   
+     // Remember the receiver task id. Used for error checking.
     ReceiverId = Receiver->Id;
-
-    // Init the RunningDelay.
-    RunningDelay = StartingDelay;
 }
 
 
@@ -1589,12 +1574,13 @@ MsgClass::MsgClass(
     int msgNum,
     int data,
     void* ptr,
-    int StartingDelay,
+    int delay,
     int priority,
     TaskClass* sender) : NodeClass(data, ptr, priority),
     ReceiverId(0),
     MsgNum(msgNum),
-    StartingDelay(StartingDelay),
+    Delay(delay),
+    EndTime(0),
     Sender(sender),
     Receiver(receiver)
 {
@@ -1626,7 +1612,7 @@ void MsgClass::CheckParameters(bool fullCheck)
     }
 
     // Check for an invalid Delay value.
-    if (StartingDelay < 0) {
+    if (Delay < 0) {
         ErrorHandler.Report(ErrorInvalidMsgDelay);
     }
 
@@ -1739,14 +1725,14 @@ MsgClass* TaskClass::Send(
     int msgNum,
     int data,
     void* ptr,
-    int startingDelay,
+    int delay,
     int priority,
     TaskClass* sender)
 {
     MsgClass* msg = 0;
 
     // Create the msg.
-    msg = new MsgClass(receiver, msgNum, data, ptr, startingDelay, priority, sender);
+    msg = new MsgClass(receiver, msgNum, data, ptr, delay, priority, sender);
 
     // Send the created msg, and return a pointer to it.
     return Send(msg);
@@ -1774,12 +1760,12 @@ TaskClass& receiver,
 int msgNum,
 int data,
 void* ptr,
-int startingDelay,
+int delay,
 int priority,
 TaskClass* sender)
 {
     // Send the msg using the version of Send that accepts a pointer (instead of a reference) to the task.
-    return Send(&receiver, msgNum, data, ptr, priority, startingDelay, sender);
+    return Send(&receiver, msgNum, data, ptr, delay, priority, sender);
 }
 
 //-----------------------------------------------------------------------------
@@ -1797,16 +1783,17 @@ MsgClass * TaskClass::Send(MsgClass* msg)
         // Make the sender this task.
         msg->Sender = this;
     }
-    
+
     // If this not a delayed msg, then schedule the receiver task to run.
-    if (msg->StartingDelay == 0) {
+    if (msg->Delay == 0) {
         ReadyList.AddByPriority(msg);
     }
     else {
-        // Load the running delay. It will be decremented on each clock tick.
-        msg->RunningDelay = msg->StartingDelay;
+        // Compute the delay end time.
+        msg->EndTime = (TimerTickType)ReadTickCount() + (TimerTickType)msg->Delay;
 
-        // Add the delayed msg to the delay list. The task will be added to the Ready List when the timer expires.
+        // Add the delayed msg to the delay list. The receiver task will be added to 
+        // the Ready List when the timer expires.
         DelayList.AddByDelay(msg);
     }
 
@@ -1915,8 +1902,8 @@ void TicsUtilsClass::MemCopy(void* dst, void* src, int numChars)
     int i;
     int temp;
 
-    // Consolidate the lower 2 bits. This assumes 32-bit integers and addresses.
-    temp = (int) ((unsigned long)dst | (unsigned long)src | numChars);
+    // Consolidate the lower bits.
+    temp = (int)dst | (int)src | numChars;
 
     // If all of the above are multiples of sizeof(int), (lower 2 bits are 0), then copy int's.
     if ((temp & (sizeof(int) - 1)) == 0) {
@@ -2090,9 +2077,6 @@ void FifoClass::Add(void* item)
 //-----------------------------------------------------------------------------
 void* FifoClass::Remove(void)
 {
-    //MDM Check for reentrancy.
-    static int reentrant = 0;
-
     // If there are no items in the fifo, then return.
     if (IsEmpty()) {
         // No items to remove.
@@ -2109,9 +2093,6 @@ void* FifoClass::Remove(void)
 
     // Update the number of items in the fifo.
     NumItemsInFifo--;
-
-    //MDM Remove this.
-    reentrant--;
 
     // Return the item at the front of the fifo.
     return Front;
