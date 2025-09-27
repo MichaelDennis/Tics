@@ -15,7 +15,7 @@
 /*
 MIT License
 
-Copyright (c) 2024 Michael Dennis McDonnell
+Copyright (c) 2025 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -147,13 +147,13 @@ void HelloTaskClass::Task(void)
 
     int oneSecond = CLOCKS_PER_SEC;
 
-    cout << "CLOCKS_PER_SEC = " << CLOCKS_PER_SEC << endl;
+    cout << "CLOCKS_PER_SEC = " << CLOCKS_PER_SEC << endl << endl;
 
     // The task body is always an infinite loop.
 
     for (;;) {
         cout << "Hello " << i++ << endl;
-        Pause(CLOCKS_PER_SEC);
+        Pause(oneSecond);
     }
 }
 

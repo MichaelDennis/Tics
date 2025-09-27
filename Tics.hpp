@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2024 Michael Dennis McDonnell
+Copyright (c) 2025 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -184,7 +184,7 @@ using namespace TicsNameSpace;
 class TaskClass;
 class FifoClass;
 class MemNodeClass;
-class MemAiMgrTaskClass;
+class MemMgrClass;
 
 //-----------------------------------------------------------------------------
 // TicsBaseClass
@@ -521,9 +521,9 @@ public:
 
     bool TaskExists(int id);
 
-    bool CancelMsg(int nodeId);
+    bool Cancel(int nodeId);
 
-    bool CancelMsg(MsgClass* msg);
+    bool Cancel(MsgClass* msg);
 
     void Schedule(TaskClass* task = 0);
 
@@ -641,11 +641,11 @@ public:
     };
     int Signature;
     int NumBytesRequested;
-    MemAiMgrTaskClass* MemoryMgrPool;
+    MemMgrClass* MemoryMgrPool;
     MemNodeClass* Next;
 
     // Functions
-    void Initialize(int numBytesRequested, MemAiMgrTaskClass* memoryMgrPool)
+    void Initialize(int numBytesRequested, MemMgrClass* memoryMgrPool)
     {
         Next = 0;
         Signature = SignatureValue;
@@ -658,7 +658,7 @@ public:
         return Signature == SignatureValue ? true : false;
     }
 
-    bool MemoryMgrMatches(MemAiMgrTaskClass* memoryMgrPool)
+    bool MemoryMgrMatches(MemMgrClass* memoryMgrPool)
     {
         return MemoryMgrPool == memoryMgrPool ? true : false;
     }
@@ -670,7 +670,7 @@ public:
     unsigned int StartOfUserArea;
 
     // Functions
-    MemNodeClass(int numBytesRequested, MemAiMgrTaskClass* memoryMgrSource) : StartOfUserArea(0) {
+    MemNodeClass(int numBytesRequested, MemMgrClass* memoryMgrSource) : StartOfUserArea(0) {
         Initialize(numBytesRequested, memoryMgrSource);
     }
 
@@ -708,7 +708,7 @@ public:
     MemNodeClass* Remove(int numBytesRequested);
 };
 
-class MemAiMgrTaskClass {
+class MemMgrClass {
 private:
     // Data
     char* Memory;
@@ -724,7 +724,7 @@ private:
 
 public:
     // Functions
-    MemAiMgrTaskClass(void* memory, int memorySizeInBytes);
+    MemMgrClass(void* memory, int memorySizeInBytes);
     void* Allocate(int numBytesRequested);
     void DeAllocate(void* p);
 };

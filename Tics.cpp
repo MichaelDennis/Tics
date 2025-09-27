@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2024 Michael Dennis McDonnell
+Copyright (c) 2025 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -63,18 +63,18 @@ namespace TicsNameSpace {
     // Data
 
     // Msgs are created by allocating a memory block from this area.
-    // An instance of MemAiMgrTaskClass class is created to manage this space.
+    // An instance of MemMgrClass class is created to manage this space.
     // (See the definition of MemoryMgr below).
     int MemoryMgrSpace[SizeMemoryMgr / sizeof(int)];
 
-    // Create an instance of MemAiMgrTaskClass to allow for allocation and
+    // Create an instance of MemMgrClass to allow for allocation and
     // deallocation of memory blocks using the space provided by
-    // MemoryMgrSpace (defined above). You can think of the MemAiMgrTaskClass
+    // MemoryMgrSpace (defined above). You can think of the MemMgrClass
     // as being similar to malloc(), with member functions to allocate and
     // deallocate memory. A chunk of memory needs to be provided to the
-    // MemAiMgrTaskClass constructor, which creates a pool from which
+    // MemMgrClass constructor, which creates a pool from which
     // memory blocks of various sizes are allocated and deallocated. 
-    MemAiMgrTaskClass MemoryMgr(MemoryMgrSpace, SizeMemoryMgr);
+    MemMgrClass MemoryMgr(MemoryMgrSpace, SizeMemoryMgr);
 
     // Various flags used by Tics.
     FlagsClass TicsFlags(SafeModeFlag);
@@ -1451,7 +1451,7 @@ MsgClass* TaskClass::Wait(int* msgNumArray, int numMsgs)
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
-bool TaskClass::CancelMsg(int nodeId)
+bool TaskClass::Cancel(int nodeId)
 {
     // If the msg has not been deleted, it should be in one of the following
     // lists. Once it is found in one of the lists, there is no need to check
@@ -1485,10 +1485,10 @@ bool TaskClass::CancelMsg(int nodeId)
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
-bool TaskClass::CancelMsg(MsgClass * msg)
+bool TaskClass::Cancel(MsgClass * msg)
 {
     // Cancel the msg based on its msg id.
-    return CancelMsg(msg->Id);
+    return Cancel(msg->Id);
 }
 
 //-----------------------------------------------------------------------------
@@ -2273,7 +2273,7 @@ MemNodeClass * MemNodeListClass::Remove(int numBytesRequested)
 ///
 /// \return The number of bytes to allocate.
 //-----------------------------------------------------------------------------
-int MemAiMgrTaskClass::NumBytesToAllocate(int numBytesRequested)
+int MemMgrClass::NumBytesToAllocate(int numBytesRequested)
 {
     unsigned int mask;
     int numBytesToAllocate;
@@ -2307,7 +2307,7 @@ int MemAiMgrTaskClass::NumBytesToAllocate(int numBytesRequested)
 ///
 /// \return A pointer to the memory block.
 //-----------------------------------------------------------------------------
-void * MemAiMgrTaskClass::Allocate(int numBytesRequested)
+void * MemMgrClass::Allocate(int numBytesRequested)
 {
     MemNodeClass * node;
 
@@ -2338,7 +2338,7 @@ void * MemAiMgrTaskClass::Allocate(int numBytesRequested)
 ///
 /// \return A pointer to the node if found, otherwise, 0.
 //-----------------------------------------------------------------------------
-MemNodeClass * MemAiMgrTaskClass::AllocateFromList(int numBytesRequested)
+MemNodeClass * MemMgrClass::AllocateFromList(int numBytesRequested)
 {
     // If the list is not empty, return the node at the front of the list,
     // otherwise, if the list is empty, 0 is returned.
@@ -2352,7 +2352,7 @@ MemNodeClass * MemAiMgrTaskClass::AllocateFromList(int numBytesRequested)
 ///
 /// \return A pointer to the memory node if found, otherwise, 0.
 //-----------------------------------------------------------------------------
-MemNodeClass * MemAiMgrTaskClass::AllocateFromMemory(int numBytesRequested)
+MemNodeClass * MemMgrClass::AllocateFromMemory(int numBytesRequested)
 {
     char * p;
     int numBytesToAllocate;
@@ -2398,7 +2398,7 @@ MemNodeClass * MemAiMgrTaskClass::AllocateFromMemory(int numBytesRequested)
 ///
 /// \param p - A pointer to the memory block, not including the header.
 //-----------------------------------------------------------------------------
-void MemAiMgrTaskClass::DeAllocate(void* p)
+void MemMgrClass::DeAllocate(void* p)
 {
     // Point to the top of the node.
     MemNodeClass * node = (MemNodeClass*)((char *)p - sizeof(NodeHeaderClass));
@@ -2423,7 +2423,7 @@ void MemAiMgrTaskClass::DeAllocate(void* p)
 /// \param memory - A pointer to the space to be used for memory block allocation.
 /// \param memorySizeInBytes - The size of memory pointed to by parameter 1.
 //-----------------------------------------------------------------------------
-MemAiMgrTaskClass::MemAiMgrTaskClass(void * memory, int memorySizeInBytes) :
+MemMgrClass::MemMgrClass(void * memory, int memorySizeInBytes) :
     Memory((char *)memory), CurrentOffset(0),
     MemorySizeInBytes(memorySizeInBytes), NumBytesAvailable(0)
 {
