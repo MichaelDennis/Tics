@@ -22,7 +22,7 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
-// Copyright (c) 2024, Tics Realtime (Michael Dennis McDonnell)
+// Copyright (c) 2025, Tics Realtime (Michael Dennis McDonnell)
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
@@ -38,8 +38,10 @@ SOFTWARE.
 #include <stdint.h>
 
 //-----------------------------------------------------------------------------
-// typedefs
+// Typedefs
 //-----------------------------------------------------------------------------
+typedef unsigned int StackType;
+typedef int32_t TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Defines
@@ -49,12 +51,6 @@ SOFTWARE.
 // Macros
 //-----------------------------------------------------------------------------
 #define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
-
-//-----------------------------------------------------------------------------
-// Typedefs
-//-----------------------------------------------------------------------------
-typedef unsigned int StackType;
-typedef int32_t TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -78,18 +74,20 @@ namespace TicsNameSpace {
 
     enum {
         // TicsNameSpace flags.
-        SafeModeFlag = 1,WatchDogFlag = 2
+        SafeModeFlag = 1, WatchDogFlag = 2
     };
 
     // Users can use any priority between LowPriority and HighPriority. 
+    // For example, MyPriority = LowPriority + 1.
     enum {
         TailPriority = 0, IdleTaskPriority = 1, LowPriority = 1000,
         MediumPriority = 3000, MediumHighPriority = 3001, HighPriority = 4000, HeadPriority = 10000
     };
 
     // Tics reserves msg numbers 0 to 999. Users can create their own
-    // msg numbers in the range low priority to high priority.
-    enum {
+    // msg numbers in the range Users can define their own msg numbers 
+    // in the range MinUserMsgNum to MaxUserMsgNum.
+    enum MsgNumEnum {
         // This must be the first and smallest defined msg number.
         FirstMsgNum = 0,
 
@@ -98,13 +96,22 @@ namespace TicsNameSpace {
         StopMsg,    DoneMsg,        ScheduleMsg,    HelloMsg,       RqstMsg,
         GrantMsg,   TimeoutMsg,     WakeupMsg,      AskMsg,         ReplyMsg,
         OkayMsg,    DeleteTaskMsg,  NotifyMsg,      OnMsg,          OffMsg,
-        IsrMsg,     ResetMsg,       StatusMsg, SuccessMsg,       FailMsg,
-        CassetteTouchedMsg, InvalidMsg, 
-
+        IsrMsg,     ResetMsg,       StatusMsg, SuccessMsg,          FailMsg,
+        InvalidMsg,
+        
         // This must be the last and largest defined msg number.
-        LastMsgNum = 99999
+        LastMsgNum = 99999,
+
+        // Users can define their own msg numbers in the range between
+        // MinUserMsgNum and MaxUserMsgNum.
+        MinUserMsgNum = 1000,
+        MaxUserMsgNum = 9999
     };
 
+    // Error numbers. The explanation should be clear from the error name.
+    // Don't confuse these with the inter-task communication msgs defined
+    // above. These are just numbers that are passed to 
+    // ErrorHandlerClass::Report(int errorNum).
     enum {
         ErrorMsgNotDefined = 1001,
         ErrorSenderOrReceiverNotDefined = 1002,
@@ -233,7 +240,6 @@ public:
 
     virtual ~NodeClass(void)
     {
-
     }
 
     bool ListIdIsValid(int listId)
@@ -280,35 +286,49 @@ public:
 class MsgClass : public NodeClass {
     // Data
 public:
+    // The id of the task that the msg will be sent to.
     int ReceiverId;
+    // The msg number which will tell the receiving task what to do.
     int MsgNum;
+    // The msg will by sent after waiting "Delay" system ticks.
     TimerTickType Delay;
+    // The system tick time at which the msg will be sent (Current time + Delay).
     TimerTickType EndTime;
+    // The task that is sending the msg.
     TaskClass* Sender;
+    // The task to which the msg will be sent.
     TaskClass* Receiver;
 
     // Functions
 public:
+    // Returns a block from the appropriate fixed block pool.
     void* operator new(size_t size);
-
+    // Returns a block to the appropriate fixed block pool.
     void operator delete(void* p);
-
+    // MsgClass constructor.
     MsgClass(
+        // The task to which the msg will be sent.
         TaskClass* receiver,
+        // The default msg that will be sent to the receiver task.
         int msgNum = StartMsg,
+        // Optional msg data.
         int data = 0,
+        // Optional pointer to msg data.
         void* ptr = 0,
+        // The system tick time at which the msg will be sent (Current time + Delay).
         int delay = 0,
+        // The priority of the msg.
         int priority = MediumPriority,
+        // The sender of the msg.
         TaskClass* sender = 0);
-
-    virtual ~MsgClass();
-
-    void Init();
-
-    void CheckParameters(bool fullCheck = true);
-
-    bool Is(int msgNum)
+        //  MsgClass destructor. Ensures that a sublcass of MsgClass is deleted properly. 
+        virtual ~MsgClass();
+        // Performs dynamic initialization of the msg.
+        void Init();
+        // Validates the args.
+        void CheckParameters(bool fullCheck = true);
+        // Returns true if the arg matches the msg number.
+        bool Is(int msgNum)
     {
         return msgNum == MsgNum ? true : false;
     }
@@ -316,107 +336,137 @@ public:
 
 //-----------------------------------------------------------------------------
 //  List class.
+//
+// Manages a doubly linked list, ordered by priority.
 //-----------------------------------------------------------------------------
 class ListClass : public TicsBaseClass {
 public:
     enum {
+        // The default number of nodes allowed in the list.
         DefaultMaxNodes = 32
     };
-
+    // The current number of nodes in the list.
     int NumNodesInList;
+    // The maximum number of nodes allowed in the list.
     int MaxNodes;
+    // The head of the list.
     NodeClass ActualHead;
+    // The tail of the list.
     NodeClass ActualTail;
+    // A pointer to the head of the list.
     NodeClass* Head;
+    // A pointer to the tail of the list.
     NodeClass* Tail;
 
     // Functions
-
+    // The ListClass constructor.
     ListClass(int maxNodes = DefaultMaxNodes);
-
+    // Returns true if the arg is the head.
     bool IsHead(NodeClass* a)
     {
         return a == Head;
     }
-
+    // Returns true if the arg is the tails.
     bool IsTail(NodeClass* a)
     {
         return a == Tail;
     }
-
+    // Unlinks the arg from the list.
     NodeClass * Unlink(NodeClass* a = 0);
-
+    // Returns true if the list is empty.
     bool IsEmpty(void);
-
+    // Returns true if the list is empty.
     bool IsNotEmpty(void);
-
+    // Returns true if the list is full.
     bool IsFull(void);
-
+    // Inserts arg a after arg b.
     void Insert(NodeClass* a, NodeClass* b);
-
+    // Adds the arg to the list according to its priority.
     void AddByPriority(NodeClass* a);
-
+    // Adds the arg to the nd of the list.
     void Add(NodeClass* a);
-
+    // Unlinks the node from the list.
     NodeClass* Remove(NodeClass* a = 0);
-
+    // Remove and delete all the items in the list.
     void Flush();
-
+    // Remove and delete all occurrences of a node from a list.
     bool DeleteNode(int id);
-
+    // Remove and delete all occurrences of a pointer to a node from a list.
     bool DeleteNode(NodeClass* node);
-
+    // Run various checks on the list.
     void CheckListIntegrity(void);
-    
+    //  Run various check prior to inserting a node into a list.   
     void DoInsertSafetyChecks(NodeClass* a, NodeClass* b);
 };
 
 //-----------------------------------------------------------------------------
 // MsgList class.
+//
+// Manages a list of MsgClass items.
 //-----------------------------------------------------------------------------
     class MsgListClass : public ListClass {
     public:
+        // Remove all references to a particular class from the list.
         bool RemoveTaskReferences(TaskClass* task);
 };
 
 //-----------------------------------------------------------------------------
 // Task List class.
+//
+// A list of all tasks currently in the system.
 //-----------------------------------------------------------------------------
 class TaskListClass : public ListClass {
 public:
 
     // Functions
-
+    // Remove all task references from the task list.
     void RemoveTaskReferences(TaskClass* task, bool removeTheTaskItselfAlso = false);
-
+    // Remove the task from the task list.
     void RemoveTask(TaskClass* task);
-
+    // Add the task to th task list.
     void Add(TaskClass* task);
-
+    // Return true if the task exists.
     bool TaskExists(TaskClass* task, int id = 0);
-
+    // Return true if the task exists.
     bool TaskExists(int taskId);
 };
 
+//-----------------------------------------------------------------------------
+// Delay List class.
+//
+// A list of all delayed tasks currently in the system.
+//-----------------------------------------------------------------------------
 class DelayListClass : public MsgListClass {
 public:
     // Data
+    // The system tick count at the time that CheckForTimeouts() was last entered.
     TimerTickType LastTime;
 
     // Functions
+    // Adds a msg to be sent out msg->Delay ticks later.
     void AddByDelay(MsgClass* a);
-    void AddByDelayDt(MsgClass* a);
+    // Checks the DelayList for expired msgs and sends them.
     void CheckForTimeouts();
 };
 
+//-----------------------------------------------------------------------------
+// Stack class.
+//
+// This class manages a task's stack.
+//-----------------------------------------------------------------------------
 class StackClass {
 public:
     // Data
     enum {
+        // Default stack size.
         DefaultStackSizeInBytes = (1024 * 4),
+        // The pad is a warning area at the end os tack memory. 
         DefaultStackPadSizeInBytes = 128,
+        // The stack must be at least this large.
         MinStackSizeInBytes = 2048,
+        // The stack must not exceed this size.
         MaxStackSizeInBytes = (MinStackSizeInBytes * 16),
+        // This pattern is written to the pad area as a visual aid.
         DefaultStackPadBytePattern = 0x22,
         DefaultStackPadWordPattern = 0x22222222,
     };
@@ -425,7 +475,6 @@ public:
     int StackPadSizeInBytes;
     StackType* StackTop;
     StackType* StackBottom;
-    StackType tempStackItem;
     StackType* SavedSp;
 
     // Functions

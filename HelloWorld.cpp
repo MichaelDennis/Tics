@@ -1,17 +1,3 @@
-
-//-----------------------------------------------------------------------------
-// Copyright (c) 2024, Tics Realtime (Michael McDonnell)
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-// Hello World
-//
-// Simple program to print "Hello World!" once a second.
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-// Includes
-//-----------------------------------------------------------------------------
 /*
 MIT License
 
@@ -36,6 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+//-----------------------------------------------------------------------------
+// Hello World
+//
+// Simple program to print "Hello World!" once a second.
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Includes
+//-----------------------------------------------------------------------------
 #include "Tics.hpp"
 #include "TicsTaskSwitch.hpp"
 #include <iostream>
@@ -72,17 +67,17 @@ using namespace std;
 // 5. The task is instantiated in the main() function like this:
 // HelloTask = new HelloTaskClass();
 // 
-// 6. Instantiating the HelloTaskClass() adds a pointer to the task instance,
-// to the Ready List, which is a doubly linked list of tasks waiting to run.
-// of tasks waiting to run. HelloTask is added to the list according to its priority.
-// All tasks are created with a default priority that can be changed.
+// 6.Instantiating the HelloTaskClass() adds a pointer to the task instance, to
+// the Ready List, which is a doubly linked list of tasks waiting to run.
+// HelloTask is added to the list according to its priority. All tasks are
+// created with a default priority that can be changed.
 // 
 // 7. In the main() function, the Tics RTOS function named Suspend() is called
-// to start the task after the task has been created (using the "new" operator).
-// The Suspend() function suspends the currently running
-// task, and runs the next task in the Ready List queue. The HelloTask is
-// in the Ready List queue because it was added to the ReadyList when it was created
-// with the C++ "new" operator.
+//    to start the task after the task has been created (using the "new"
+//    operator). The Suspend() function suspends the currently running task, and
+//    runs the next task in the Ready List queue. The HelloTask is in the Ready
+//    List queue because it was added to the ReadyList when it was created with
+//    the C++ "new" operator.
 // 
 // 8. When the HelloTask runs it calls the Tics RTOS Pause() function to put
 // the HelloTask to sleep for 1 second (1000 ticks).
@@ -102,40 +97,12 @@ class HelloTaskClass : public TaskClass {
 public:
     // Functions
     void Task();
-    MsgClass * CheckForMsgs(void);
-    void PrintDelayList();
 };
 
 //-----------------------------------------------------------------------------
-// Pointer the task. Used in main() to create the task.
+// Pointer the hello task. Used in main() to create the hello task.
 //-----------------------------------------------------------------------------
 HelloTaskClass * HelloTask;
-
-MsgClass * HelloTaskClass::CheckForMsgs(void)
-{
-    int i = 0;
-    MsgClass * msg = 0;
-
-    msg = Recv();
-    i++;
-
-    switch (msg->MsgNum) {
-
-        case 1000:
-        cout << "1000 " << i << "\n";
-        break;
-
-        case 1001:
-        cout << "2000 " << i << "\n";
-        break;
-
-        case 1002:
-        cout << "4000 " << i << "\n";
-        break;
-    }
-
-    return msg;
-}
 
 //-----------------------------------------------------------------------------
 // Implement the Hello Task function.
@@ -145,26 +112,21 @@ void HelloTaskClass::Task(void)
     int i = 0;
     MsgClass * msg;
 
+    // Get the number of system clock ticks in one second.
     int oneSecond = CLOCKS_PER_SEC;
 
+    // Output the number of system clock ticks in one second.
     cout << "CLOCKS_PER_SEC = " << CLOCKS_PER_SEC << endl << endl;
 
     // The task body is always an infinite loop.
 
     for (;;) {
-        cout << "Hello " << i++ << endl;
+        // Output the string "Hello World!World.cpp" followed by a countr value.
+        cout << "Hello World! " << i++ << endl;
+        // Sleep for one second.
         Pause(oneSecond);
     }
 }
-
-class MyClass {
-    public:
-    int a;
-    int b;
-    int c;
-};
-
-MyClass My;
 
 //-----------------------------------------------------------------------------
 // Create HelloTask and start tasking.
@@ -173,10 +135,6 @@ int main()
 {
      // Create the hello task.
     HelloTask = new HelloTaskClass();
-
-    My.a = 1;
-    My.b = 2;
-    My.c = 3;
 
     // Start tasking.
     Suspend();

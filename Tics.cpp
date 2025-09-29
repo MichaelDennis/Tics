@@ -305,7 +305,6 @@ void TaskClass::Suspend(void)
         SwitchTasks(newTask);
 }
 
-
 //-----------------------------------------------------------------------------
 /// \brief Checks for the existence of a task object in the TaskList.
 ///
@@ -441,7 +440,8 @@ bool MsgListClass::RemoveTaskReferences(TaskClass * task)
 
 
 //-----------------------------------------------------------------------------
-/// \brief Remove and delete one or more occurrences of a node from a list.
+/// \brief Remove and delete one or more occurrences of a pointer to a
+/// a node from a list.
 ///
 /// \param node - A pointer to the node to remove from the list.
 //-----------------------------------------------------------------------------
@@ -555,18 +555,9 @@ NodeClass* ListClass::Unlink(NodeClass* a)
 /// \brief Add a msg to the list according to its priority.
 ///
 /// Search starting at the end of the list, since we'll probably add at the
-/// end, because all msgs are typically at the same priority. Per the second
-/// parameter, (addByTaskPriority), the msg can be added according to the priority
-/// of the task to receive the msg, or by the Priority field of the msg
-/// itself. Tics adds msgs to the ReadyList according to Receiver priority,
-/// and by msg priority when the msg is moved to the msg list of the receiving 
-/// task.
+/// end, because all msgs are typically at the same priority. 
 ///
 /// \param a - The msg to add.
-///
-/// \param addByTaskPriority - If true, add the msg into the list by the 
-/// priority of the receiving task, (the Receiver field of the msg), otherwise,
-/// add by the Priority field of the msg itself.
 //-----------------------------------------------------------------------------
 void ListClass::AddByPriority(NodeClass* a)
 {
