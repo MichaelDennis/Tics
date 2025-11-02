@@ -72,8 +72,8 @@ namespace TicsNameSpace {
     // MemoryMgrSpace (defined above). You can think of the MemMgrClass
     // as being similar to malloc(), with member functions to allocate and
     // deallocate memory. A chunk of memory needs to be provided to the
-    // MemMgrClass constructor, which creates a pool from which
-    // memory blocks of various sizes are allocated and deallocated. 
+    // MemMgrClass constructor, from which blocks of memory are carved
+    // out when needed. 
     MemMgrClass MemoryMgr(MemoryMgrSpace, SizeMemoryMgr);
 
     // Various flags used by Tics.
@@ -240,12 +240,12 @@ void TaskListClass::Add(TaskClass* task)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Perform various tasks that need to be handled prior to performing
+/// \brief Perform various things that need to be done prior to performing
 /// a context switch by calling SwitchTasks().
 /// 
 /// Note: The very first time that a task is invoked, it can't be "resumed".
-/// This condition is handled in function SwitchTasks(), which 
-/// is called at the end of this function.
+/// This condition is handled in function SwitchTasks(), which is called at
+///  the end of this function.
 //-----------------------------------------------------------------------------
 void TaskClass::Suspend(void)
 {
@@ -257,8 +257,8 @@ void TaskClass::Suspend(void)
         DeleteList.Flush();
     }
 
-        // Check for timeouts and isr msgs.
-        CheckForSystemEvents();
+    // Check for timeouts and isr msgs.
+    CheckForSystemEvents();
 
         // If there are msgs in the Ready List, then process the next msg. 
         if (ReadyList.IsNotEmpty()) {
@@ -445,7 +445,7 @@ bool MsgListClass::RemoveTaskReferences(TaskClass * task)
 ///
 /// \param node - A pointer to the node to remove from the list.
 //-----------------------------------------------------------------------------
-bool ListClass::DeleteNode(NodeClass * compareNode)
+bool ListClass::Delete(NodeClass * compareNode)
 {
     NodeClass * node;
     NodeClass * next;
@@ -473,7 +473,7 @@ bool ListClass::DeleteNode(NodeClass * compareNode)
 ///
 /// \param node - The id of the node to remove from the list.
 //-----------------------------------------------------------------------------
-bool ListClass::DeleteNode(int id)
+bool ListClass::Delete(int id)
 {
     NodeClass* node;
     NodeClass* next;
@@ -730,15 +730,16 @@ bool ListClass::IsFull(void)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Remove the indicated msg from the list, but don't delete it.
+/// \brief Remove the indicated node from the list, but don't delete it.
 ///
-/// Removes the indicated msg. If the msg argument is not specified, it will 
-/// assume its default value of 0, in which case the msg at the head of the
-/// list is returned. If the msg is not found, an error is generated.
+/// Removes, but does not delete, the indicated node. If the node argument is
+//  not specified, it will assume its default value of 0, in which case the node
+//  at the head of the list is returned. If the node is not found, an error is
+//  generated.
 ///
-/// \param a - The msg to remove. If 0, the msg at the head of the list is returned.
+/// \param a - The node to remove. If 0, the node at the head of the list is returned.
 ///
-/// \return The removed msg.
+/// \return The removed node.
 //-----------------------------------------------------------------------------
 NodeClass* ListClass::Remove(NodeClass* a)
 {
@@ -746,20 +747,20 @@ NodeClass* ListClass::Remove(NodeClass* a)
 
     // If the list is empty, then error.
     if (IsEmpty()) {
-        ErrorHandler.Report(ErrorAttemptToRemoveAMsgFromAnEmptyList);
+        ErrorHandler.Report(ErrorCannotRemoveANodeFromAnEmptyList);
     }
 
     // If no argument was specified, it will assume its default value of 0,
-    // in which case we return the msg at the head of the list. 
+    // in which case we return the node at the head of the list. 
     if (a == 0) {
-        // We know that there is a msg at Head->Next because we previously checked for an empty list.
+        // We know that there is a node at Head->Next because we previously checked for an empty list.
         a = Head->Next;
     }
 
-    // Unlink the msg from the list.
+    // Unlink the node from the list.
     node = Unlink(a);
 
-    // Return a pointer to the unlinked msg.
+    // Return a pointer to the unlinked node.
     return node;
 }
 
@@ -815,7 +816,7 @@ bool TaskListClass::TaskExists(TaskClass* task, int id)
 /// \brief Checks for the existence of a task object in the TaskList.
 ///
 /// The Task List contains a list of TaskClass objects. Each object is
-/// checked for an id match. a value of true is returned if a match is
+/// checked for an id match. A value of true is returned if a match is
 /// found, otherwise, false is returned.
 /// 
 /// \param id - The task id to match.
@@ -859,7 +860,7 @@ void ListClass::Flush()
 }
 
 //-----------------------------------------------------------------------------
-/// \brief MemNdeListClass constructor.
+/// \brief ListClass constructor.
 ///
 /// The list is doubly linked, with permanent Head and Tail nodes, which makes
 /// for easier coding and understanding. The list is initialized so that Head
@@ -888,7 +889,7 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
     Head->Prev = Head->Next = Tail;
     Tail->Prev = Tail->Next = Head;
 
-    // Initialize the number of msgs in the list.
+    // Initialize the number of nodes in the list.
     NumNodesInList = 0;
 }
 
@@ -909,6 +910,9 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo. The fifo can only be used by one isr.
 /// \param data - The data (msg) to be copied into the fifo slot.
+///
+/// Note: There is no need for a data count, because the fifo knows
+/// its slot size.
 //-----------------------------------------------------------------------------
 void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
 {
@@ -948,7 +952,7 @@ void TaskListClass::RemoveTask(TaskClass* task)
     }
 
     // Delete the task object from the task list.
-    DeleteNode(task);
+    Delete(task);
 }
 
 //-----------------------------------------------------------------------------
@@ -962,14 +966,14 @@ void TaskListClass::RemoveTaskReferences(TaskClass* task, bool removeTheTaskItse
     NodeClass* node;
     TaskClass* tempTask;
 
+    //MDM Check TaskList integrity.
+    tempTask->MsgList.CheckListIntegrity();
+
     // For each task in the Task List, remove from its msg list all occurrences of task (the arg to this function).
     for (node = Head->Next; node != Tail; node = node->Next) {
 
         // The node is actually a task object, so make the conversion.
         tempTask = (TaskClass*) node;
-
-        //MDM Check TaskList integrity.
-        tempTask->MsgList.CheckListIntegrity();
 
         // Remove all occurrences of the task from tempTask's msg list.
         tempTask->MsgList.RemoveTaskReferences(task);
@@ -977,7 +981,7 @@ void TaskListClass::RemoveTaskReferences(TaskClass* task, bool removeTheTaskItse
 
     // Now remove the task itself from the task list.
     if (removeTheTaskItselfAlso) {
-        DeleteNode(task);
+        Delete(task);
     }
 }
 
@@ -990,7 +994,7 @@ void TaskListClass::RemoveTaskReferences(TaskClass* task, bool removeTheTaskItse
 /// this function is not meant to be accurate, clock() should be fine, assuming
 /// your compiler supports it.
 ///
-/// Note: the coarser the clock granularity the better. For example,
+/// Note: The coarser the clock granularity the better. For example,
 /// 10 millisecond granularity is preferable to 1 ms. We recommend 
 /// 10 ms or higher. It's up to you to decide what granularity you
 /// can live with.
@@ -1034,7 +1038,7 @@ void TicsNameSpace::Schedule(TaskClass* task, bool inIsr)
     }
     else {
         // Add the task to the Ready List.
-        ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg));
+        ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, 0, task->Priority));
     }
 }
 
@@ -1147,11 +1151,12 @@ TaskClass::TaskClass(
     const char* name,
     int priority,
     int flags,
-    int stackSizeInBytes):
+    int stackSizeInBytes) :
     Flags(flags),
     Stack(stackSizeInBytes),
     Name(name),
-    Priority(priority), NodeClass()
+    Priority(priority), 
+    NodeClass()
 {
     // Add the task to the list of active tasks.
     TaskList.Add(this);
@@ -1259,6 +1264,7 @@ MsgClass * TaskClass::StartTimer(int numTicks, int priority, int msgNum)
 /// \brief Put the task to sleep for the indicated number of ticks.
 ///
 /// \param numTicks - The number of ticks to sleep.
+///
 /// \param priority - The priority of the msg.
 //-----------------------------------------------------------------------------
 void TaskClass::Pause(int numTicks, int priority)
@@ -1449,15 +1455,15 @@ bool TaskClass::Cancel(int nodeId)
     // the others.
 
     // Check the Delay List.
-    if (DelayList.DeleteNode(nodeId)) {
+    if (DelayList.Delete(nodeId)) {
         return true;
     }
     // Check the Ready List.
-    else if (ReadyList.ListClass::DeleteNode(nodeId)) {
+    else if (ReadyList.ListClass::Delete(nodeId)) {
         return true;
     }
-    // Check the task list
-    else if (TaskList.DeleteNode(nodeId)) {
+    // Check the Task List.
+    else if (TaskList.Delete(nodeId)) {
         return true;
     }
     else {
@@ -1788,7 +1794,7 @@ MsgClass * TaskClass::Send(MsgClass* msg)
         DelayList.AddByDelay(msg);
     }
 
-    // Return the msg that was sent.
+    // Return the msg that was sent scheduled to run after a delay.
     return msg;
 }
 
@@ -2049,7 +2055,6 @@ void FifoClass::Add(void* item)
     // Advance to the next slot.
     Rear = Bump(Rear);
 
-
     // Copy the item to the slot.
     TicsUtilsClass::MemCopy(Rear, item, SlotSizeInBytes);
 
@@ -2166,9 +2171,6 @@ void FifoClass::Reset()
 /// error numbers. The source of the error is determined by searching the code
 /// for the unique error number.
 /// 
-/// You can also choose to replace the body of this function with a "throw"
-/// to be caught in main() typically, or in an initialization function.
-///
 /// \param - The error number reported from the caller.
 //-----------------------------------------------------------------------------
 void ErrorHandlerClass::Report(int errorNum)
@@ -2258,7 +2260,7 @@ MemNodeClass * MemNodeListClass::Remove(int numBytesRequested)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Round up desired number of bytes to allocate to an aligned value.
+/// \brief Round up the desired number of bytes to allocate to an aligned value.
 ///
 /// \param numBytesRequested - The size of the desired memory block.
 ///

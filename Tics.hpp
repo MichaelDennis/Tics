@@ -1,4 +1,5 @@
 /*
+
 MIT License
 
 Copyright (c) 2025 Michael Dennis McDonnell
@@ -57,7 +58,7 @@ typedef int32_t TimerTickType;
 //-----------------------------------------------------------------------------
 namespace TicsNameSpace {
 
-    enum {
+    enum TicsNamespaceEnum {
         // The size of the Tics dynamic memory space.
         SizeMemoryMgr = 0x100000,
         // The default number of interrupt fifo slots.
@@ -70,16 +71,13 @@ namespace TicsNameSpace {
         // Array end marker. A general marker used to mark the end
         // of an array.
         ArrayEndMarker = 99999,
-    };
-
-    enum {
-        // TicsNameSpace flags.
+         // TicsNameSpace flags.
         SafeModeFlag = 1, WatchDogFlag = 2
-    };
+   };
 
     // Users can use any priority between LowPriority and HighPriority. 
     // For example, MyPriority = LowPriority + 1.
-    enum {
+    enum NodePriorityEnum {
         TailPriority = 0, IdleTaskPriority = 1, LowPriority = 1000,
         MediumPriority = 3000, MediumHighPriority = 3001, HighPriority = 4000, HeadPriority = 10000
     };
@@ -99,9 +97,6 @@ namespace TicsNameSpace {
         IsrMsg,     ResetMsg,       StatusMsg, SuccessMsg,          FailMsg,
         InvalidMsg,
         
-        // This must be the last and largest defined msg number.
-        LastMsgNum = 99999,
-
         // Users can define their own msg numbers in the range between
         // MinUserMsgNum and MaxUserMsgNum.
         MinUserMsgNum = 1000,
@@ -112,7 +107,7 @@ namespace TicsNameSpace {
     // Don't confuse these with the inter-task communication msgs defined
     // above. These are just numbers that are passed to 
     // ErrorHandlerClass::Report(int errorNum).
-    enum {
+    enum ErrorMsgEnum {
         ErrorMsgNotDefined = 1001,
         ErrorSenderOrReceiverNotDefined = 1002,
         ErrorMsgIsAlreadyInAList = 1003,
@@ -134,7 +129,7 @@ namespace TicsNameSpace {
         ErrorCannotAddANullMsg = 1019,
         ErrorCannotAddAMsgThatIsAlreadyInAnotherList = 1020,
         ErrorCannotRemoveANullMsg = 1021,
-        ErrorCannotRemoveAMsgFromAnEmptyList = 1022,
+        ErrorCannotRemoveANodeFromAnEmptyList = 1022,
         ErrorCannotRemoveTheHeadOrTailMsg = 1023,
         ErrorCannotRemoveAMsgIfItIsNotInAList = 1024,
         ErrorCouldNotAllocateMemory = 1025,
@@ -205,12 +200,14 @@ public:
     int Id;
 
     // Functions
+    // TicsBaseClass constructor.
     TicsBaseClass(void)
     {
         // Object Id starts at 1. Zero is used to indicated that the Id has not been assigned.
         Id = ++IdCounter;
     }
 
+    // TicsBaseClass destructor.
     ~TicsBaseClass(void)
     {
         // Bump the Id to indicate that the object has been deleted.
@@ -225,9 +222,12 @@ public:
 //-----------------------------------------------------------------------------
 class NodeClass : public TicsBaseClass {
 public:
-// Data
+    // Data
+    // Pointer to the next node in the list.
     NodeClass* Next;
+    // Pointer to the previous node in the list.
     NodeClass* Prev;
+    // 
     int Data;
     void* Ptr;
     int ListId = 0;
@@ -270,10 +270,15 @@ public:
     int Flags;
 
     // Functions
+    // FlagsClass constructor. All flags are initialized to 0.
     FlagsClass(int flags = 0) : Flags(flags) {}
+    // Set one or more flags with a mask.
     void Set(int mask) { Flags |= mask; }
+    // Clear one or more flags with a mask.
     void Clr(int mask) { Flags &= (~mask); }
+    // Check if one or more flags are set.
     bool IsSet(int mask) { return Flags & mask; }
+    // Check if one or more flags are clear.
     bool IsClr(int mask) { return IsSet(mask) ? false : true; }
 };
 
@@ -290,7 +295,7 @@ public:
     int ReceiverId;
     // The msg number which will tell the receiving task what to do.
     int MsgNum;
-    // The msg will by sent after waiting "Delay" system ticks.
+    // The msg will by sent after waiting "Delay" system ticks.If Delay is 0, send immediately.
     TimerTickType Delay;
     // The system tick time at which the msg will be sent (Current time + Delay).
     TimerTickType EndTime;
@@ -321,7 +326,7 @@ public:
         int priority = MediumPriority,
         // The sender of the msg.
         TaskClass* sender = 0);
-        //  MsgClass destructor. Ensures that a sublcass of MsgClass is deleted properly. 
+        //  MsgClass destructor. 
         virtual ~MsgClass();
         // Performs dynamic initialization of the msg.
         void Init();
@@ -341,7 +346,7 @@ public:
 //-----------------------------------------------------------------------------
 class ListClass : public TicsBaseClass {
 public:
-    enum {
+    enum ListClassEnum {
         // The default number of nodes allowed in the list.
         DefaultMaxNodes = 32
     };
@@ -366,33 +371,33 @@ public:
     {
         return a == Head;
     }
-    // Returns true if the arg is the tails.
+    // Returns true if the arg is the tail.
     bool IsTail(NodeClass* a)
     {
         return a == Tail;
     }
-    // Unlinks the arg from the list.
+    // Unlinks the node from the list.
     NodeClass * Unlink(NodeClass* a = 0);
     // Returns true if the list is empty.
     bool IsEmpty(void);
-    // Returns true if the list is empty.
+    // Returns true if the list is not empty.
     bool IsNotEmpty(void);
     // Returns true if the list is full.
     bool IsFull(void);
-    // Inserts arg a after arg b.
+    // Inserts node a after node b.
     void Insert(NodeClass* a, NodeClass* b);
-    // Adds the arg to the list according to its priority.
+    // Adds the node to the list according to its priority.
     void AddByPriority(NodeClass* a);
-    // Adds the arg to the nd of the list.
+    // Adds the node to the end of the list.
     void Add(NodeClass* a);
-    // Unlinks the node from the list.
+    // Unlinks the node from the list. Defaults to the first node in the list.
     NodeClass* Remove(NodeClass* a = 0);
     // Remove and delete all the items in the list.
     void Flush();
-    // Remove and delete all occurrences of a node from a list.
-    bool DeleteNode(int id);
-    // Remove and delete all occurrences of a pointer to a node from a list.
-    bool DeleteNode(NodeClass* node);
+    // Remove and delete all occurrences of a node from the list.
+    bool Delete(int id);
+   // Remove and delete all occurrences of a node from the list.
+    bool Delete(NodeClass* node);
     // Run various checks on the list.
     void CheckListIntegrity(void);
     //  Run various check prior to inserting a node into a list.   
@@ -439,7 +444,7 @@ public:
 class DelayListClass : public MsgListClass {
 public:
     // Data
-    // The system tick count at the time that CheckForTimeouts() was last entered.
+    // The system tick count at the time of the last CheckForTimeouts() call.
     TimerTickType LastTime;
 
     // Functions
@@ -457,10 +462,10 @@ public:
 class StackClass {
 public:
     // Data
-    enum {
+    enum StackClassEnum {
         // Default stack size.
         DefaultStackSizeInBytes = (1024 * 4),
-        // The pad is a warning area at the end os tack memory. 
+        // The pad is a warning area at the end of stack memory. 
         DefaultStackPadSizeInBytes = 128,
         // The stack must be at least this large.
         MinStackSizeInBytes = 2048,
@@ -468,31 +473,44 @@ public:
         MaxStackSizeInBytes = (MinStackSizeInBytes * 16),
         // This pattern is written to the pad area as a visual aid.
         DefaultStackPadBytePattern = 0x22,
+        // This pattern is written to the pad area as a visual aid.
         DefaultStackPadWordPattern = 0x22222222,
     };
 
+    // Stack size in bytes.
     int StackSizeInBytes;
+    // Stack pad size in bytes.
     int StackPadSizeInBytes;
+    // Pointer to the top of the stack.
     StackType* StackTop;
+    // Pointer to the bottom of the stack.
     StackType* StackBottom;
+    // The stack pointer of a task prior to performing a context switch.
     StackType* SavedSp;
 
     // Functions
+    // StackClass constructor.
     StackClass(
         int stackSizeInBytes = DefaultStackSizeInBytes,
         int stackPadSizeInBytes = DefaultStackPadSizeInBytes
     );
-
+    // StackClass destructor.
     ~StackClass();
 
+    // Checks the stack for validity.
     void Check();
 };
 
+//-----------------------------------------------------------------------------
+// Fifo class.
+//
+// Manages a circular fifo queue.
+//-----------------------------------------------------------------------------
 class FifoClass {
 public:
     // Data
 
-    enum {
+    enum FifoClassEnum {
         DefaultNumFifoItems = 16
     };
 
@@ -540,119 +558,193 @@ class TaskClass : public NodeClass {
 public:
     // Data
 
-    enum {
-        // TaskClass flags.
+    enum TaskClassEnum {
+        // Flag that tells whether a task has been started for the first time or not.
         TaskStartedFlag = 1,
+        // If set, the task that received the msg will quietly drop it.
         DropUnexpectedMsgsFlag = 2,
+        // If set, a task will be scheduled to run after it is created.
         ScheduleTaskOnCreationFlag = 4,
+        // The default numTicks in the Pause(numTicks) member function.
         DefaultNumTicks = 1000
     };
 
+    // Flag word that contains various flag bits.
     FlagsClass Flags;
-    static int IdCounter;
+    // Every task needs its own stack.
     StackClass Stack;
+    // Optional task name. Used in debugging.
     const char* Name;
+    // When a msg is added to the Ready List where this task is the receiver, 
+    // the msg priority is set to this->Priority.
     int Priority;
+    // When a msg is removed from the Ready List, it is inserted into
+    // the receiver task's MsgList according to the msg priority.
     MsgListClass MsgList;
 
     // Functions
+    // TaskClass constructor
     TaskClass(
+        // Optional task name.
         const char* name = 0,
+        // The priority used when a task is scheduled.
         int priority = MediumPriority,
+        // The task will be scheduled by Tics when it is created.
         int flags = (ScheduleTaskOnCreationFlag),
+        // A stack size of 0 gets the default stack size.
         int stackSizeInBytes = 0);
 
+
+    // TaskClass destructor.
     virtual ~TaskClass(void);
-
+    // The task must be implemented by the user.
     virtual void Task() = 0;
-
+    // Returns true if the task exists.
     bool TaskExists(TaskClass* receiver = 0);
-
+    // Returns true if the task exists.
     bool TaskExists(int id);
-
+    // Deletes a sent msg with the given node id. Returns true if the 
+    // msg was found and deleted.
     bool Cancel(int nodeId);
-
+    // Deletes a sent msg. Returns true if the msg was found and deleted.
     bool Cancel(MsgClass* msg);
-
+    // Adds the task to the Ready List. If the task arg is 0, then this task is used.
     void Schedule(TaskClass* task = 0);
-
+    // Send a msg to another task.
     MsgClass* Send(
+        // The task to send the msg to.
         TaskClass* task,
+        // The msg number.
         int msgNum = NullMsg,
+        // Optional msg data.
         int data = 0,
+        // Optional pointer to msg data.
         void* ptr = 0,
+        // The number of ticks to wait before sending out the msg.
         int delay = 0,
+        // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
+        // The sender of the msg, If 0, the sender defaults to this.
         TaskClass* sender = 0);
-
+    // Send msg to a class instance reference. 
     MsgClass* Send(
+        // A reference to the class to send the msg to.
         TaskClass& task,
+        // The msg number.
         int msgNum = NullMsg,
+        // Optional msg data.
         int data = 0,
+        // Optional pointer to msg data.
         void* ptr = 0,
+        // The number of ticks to wait before sending out the msg.
         int delay = 0,
+        // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
+        // The sender of the msg, If 0, the sender defaults to this.
         TaskClass* sender = 0);
-
+    // Send a pre-made msg.
     MsgClass* Send(MsgClass* msg);
-
+    // Reply to a received msg.
     void Reply(
+        // The msg to reply to.
         MsgClass* receivedMsg,
+        // The msg number.
         int msgNum = NullMsg,
+        // Optional msg data.
         int data = 0,
+        // Optional pointer to msg data.
         void* ptr = 0,
+        // The number of ticks to wait before sending out the msg.
         int delay = 0,
+        // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
+        // The sender of the msg, If 0, the sender defaults to this.
         TaskClass* sender = 0);
-
+    // Pause for the indicated number of ticks.
     void Pause(
+        // The number of ticks to sleep.
         int numTicks = DefaultNumTicks,
+        // The priority of the internal wake-up msg sent to the issuing task.
         int priority = MediumPriority);
-
+    // A msg is sent to to the issuing task after the indicated number of ticks.
     MsgClass* StartTimer(
+        // The number of timer ticks.
         int numTicks = DefaultNumTicks,
+        // The priority of the wake-up msg sent to the issuing task.
         int priority = MediumPriority,
+        // The msg number to send to the issuing task.
         int msgNum = TimeoutMsg);
-
+    // Let other tasks run, then resume this task.
     void Yield(void);
-
-    MsgClass* Wait(int msgNum = AnyMsg);
-
-    MsgClass* Wait(int* msgNumArray, int numMsgs);
-
-    void Wait(FifoClass* fifo, void* data);
-
-    MsgClass* Recv(int msgNum = AnyMsg);
-
-    MsgClass* Recv(int* msgNumArray, int numMsgs);
-
+    // Sleep until the indicated msg arrives. In AnyMsg is indicated, then the
+    // task will wake up on the arrival of any msg number.
+    MsgClass* Wait(
+        // The msg number to wait for.
+        int msgNum = AnyMsg);
+    // Wait for any msg in an array.
+    MsgClass* Wait(
+        // Wake up the task on receiving any msg in the array.
+        int* msgNumArray, 
+        // The number of msgs in the array.
+        int numMsgs);
+    // Wait for an item to be added to a fifo.
+    void Wait(
+        // The fifo to wait on.
+        FifoClass* fifo,
+        // A pointer to the fifo slot that has data after the task resumes. 
+        void* data);
+    // Returns a pointer to the requested msg number if found in MsgList, otherwise
+    // a 0 is returned.
+    MsgClass* Recv(
+        // The msg requested. AnyMsg means return the first msg in MsgList. 
+        int msgNum = AnyMsg);
+    // Search MsgList for any msg in the array and return it if found,
+    MsgClass* Recv(
+        // The msgNum array to search for a match in.
+        int* msgNumArray, 
+        // The number of msgs in the array.
+        int numMsgs);
+    // Suspend the current task and resume the task at the front of the Ready List.
     void Suspend();
 
-    void SwitchTasks(TaskClass* newTask);
-
-    void DeleteFromMsgList(TaskClass* task);
-
+    // Save the current task's context and restore the newTask's context.
+    void SwitchTasks(
+        // The task to switch to.
+        TaskClass* newTask);
+    // Remove all references to the task from MsgList.
+    void DeleteFromMsgList(
+        // The task to delete.
+        TaskClass* task);
+    // Creates a new instance of this class.
     void* operator new(size_t size);
-
+    // Deletes as instance of this class.
     void operator delete(void* p);
-
-    bool GetFlag(int mask) { return Flags.IsSet(mask); }
-
-    void SetFlag(int mask) { Flags.Set(mask); }
-
+    // Returns true if any of the bits in the mask are true. 
+    bool GetFlag(int mask) {
+        // Check the Flags against the mask.
+         return Flags.IsSet(mask); }
+    // Set one or more mask bits in the Flags.
+    void SetFlag(int mask) { 
+        // Set the mask bits in the Flags.
+        Flags.Set(mask); }
+    // Clear all the mask bits in the Flags.
     void ClrFlag(int mask) { Flags.Clr(mask); }
 };
-
+// Idle Task Class definition.
 class IdleTaskClass : public TaskClass {
 public:
     // Functions
-    IdleTaskClass(char* name = (char*)"IdleTask", int priority = IdleTaskPriority) :
-        TaskClass(name, priority)
-    {
-    }
-   void Task();
+    // Idle Task Class constructor.
+    IdleTaskClass(
+        // The task name.
+        char* name = (char*)"IdleTask", 
+        // Task priority.
+        int priority = IdleTaskPriority) : TaskClass(name, priority) {}
+        // Task function.
+        void Task();
 };
 
+// All errors call the Report() method.
 class ErrorHandlerClass {
 public:
     // Data
@@ -662,33 +754,42 @@ public:
     void Report(int errorNum = 0);
 };
 
+// This class provides various system level functions.
 class TicsSystemTaskClass : public TaskClass {
 public:
     // Functions
     TicsSystemTaskClass() :
         TaskClass(
+            // Task name.
             "TicsSystemTask",
+            // Task priority.
             MediumPriority,
+            // Unexpected msgs are dropped.
             DropUnexpectedMsgsFlag)
     {
     }
-
+    // The app task.
     void Task();
 };
 
+// This class provides utility functions used internally by Tics.
 class TicsUtilsClass {
 public:
     static void MemCopy(void* dst, void* src, int numChars);
     static void MemSet(void* dst, int numChars, char data);
 };
 
+// Each node in the memory mgr list, points to a memory pool of fixed size 
+// memory blocks.
 class NodeHeaderClass {
 public:
     // Data
-    enum {
+    enum NodeHeaderClassEnum {
         SignatureValue = 0x01234567
     };
+    // Used to detect node corruption.
     int Signature;
+    // Number of bytes requested 
     int NumBytesRequested;
     MemMgrClass* MemoryMgrPool;
     MemNodeClass* Next;
@@ -757,6 +858,12 @@ public:
     MemNodeClass* Remove(int numBytesRequested);
 };
 
+//-----------------------------------------------------------------------------
+// MemMgrClass
+//
+// The MemMgrClass manages a linked list of MemNodeClass objects, each of which
+// contains a list of 
+//-----------------------------------------------------------------------------
 class MemMgrClass {
 private:
     // Data
@@ -779,17 +886,6 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// DebuggerClass
-//-----------------------------------------------------------------------------
-class DebuggerClass {
-public:
-    // Data
-
-    // Functions
-    void DisplayReadyList();
-};
-
-//-----------------------------------------------------------------------------
 // InterruptTableRowClass
 //-----------------------------------------------------------------------------
 class InterruptTableRowClass {
@@ -808,9 +904,7 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-//-----------------------------------------------------------------------------
-// Helper Functions
-//-----------------------------------------------------------------------------
+// TicsNameSpace External Definitions
 //-----------------------------------------------------------------------------
 
 namespace TicsNameSpace {
@@ -827,64 +921,6 @@ namespace TicsNameSpace {
     extern MsgListClass ReadyList;
     extern FlagsClass TicsFlags;
 };
-
-//-----------------------------------------------------------------------------
-// For Testing - throw away later.
-//-----------------------------------------------------------------------------
-
-class DtSlotClass {
-public:
-    // Data
-    enum { Available = -1 };
-    int Dt;
-    int Hits;
-
-    // Functions
-    DtSlotClass() : Dt(Available), Hits(0)
-    {
-
-    }
-    bool IsAvailable(int dt)
-    {
-        if (dt == Available) {
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-};
-
-class DtSlotArrayClass {
-public:
-    // Data
-    enum { LenDSlotArray = 50 };
-    DtSlotClass DtSlot[LenDSlotArray];
-
-    // Functions
-    bool Add(int dt)
-    {
-        // Look for a slot with the same dt value.
-        for (int i = 0; i < LenDSlotArray; i++) {
-            if (DtSlot[i].Dt == dt) {
-                DtSlot[i].Hits++;
-                return true;
-            }
-        }
-
-        // Look for any empty slot.
-        for (int i = 0; i < LenDSlotArray; i++) {
-            if (DtSlot[i].IsAvailable(dt)) {
-                DtSlot[i].Dt = dt;
-                DtSlot[i].Hits++;
-                return true;
-            }
-        }
-
-        return false;
-    }
-};
-
 
 //-----------------------------------------------------------------------------
 // End guard

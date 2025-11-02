@@ -121,7 +121,7 @@ void HelloTaskClass::Task(void)
     // The task body is always an infinite loop.
 
     for (;;) {
-        // Output the string "Hello World!World.cpp" followed by a countr value.
+        // Output the string "Hello World!World.cpp" followed by a counter value.
         cout << "Hello World! " << i++ << endl;
         // Sleep for one second.
         Pause(oneSecond);
