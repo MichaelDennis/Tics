@@ -67,7 +67,7 @@ using namespace std;
 // 5. The task is instantiated in the main() function like this:
 // HelloTask = new HelloTaskClass();
 // 
-// 6.Instantiating the HelloTaskClass() adds a pointer to the task instance, to
+// 6.Instantiating the HelloTaskClass() adds a pointer to the task instance to
 // the Ready List, which is a doubly linked list of tasks waiting to run.
 // HelloTask is added to the list according to its priority. All tasks are
 // created with a default priority that can be changed.
