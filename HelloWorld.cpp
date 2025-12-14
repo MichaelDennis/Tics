@@ -109,8 +109,8 @@ HelloTaskClass * HelloTask;
 //-----------------------------------------------------------------------------
 void HelloTaskClass::Task(void)
 {
+    // Counter initialization.
     int i = 0;
-    MsgClass * msg;
 
     // Get the number of system clock ticks in one second.
     int oneSecond = CLOCKS_PER_SEC;
