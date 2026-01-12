@@ -1,7 +1,7 @@
 **The Tics C++ Based RTOS Project**
 This page houses the source code for the Tics RTOS.
 
-**Tics RTOS — Feature Overview (Temporary README)**
+**Tics RTOS — Feature Overview** 
 Tics is a lightweight, message-based real-time operating system designed for clarity, portability, and 
 rapid prototyping. This brief summary will be replaced with a full README later.
 
