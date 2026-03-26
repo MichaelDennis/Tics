@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "Linux-m32",
+            "includePath": ["${workspaceFolder}/**"],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x86",
+            "compilerArgs": ["-m32"]
+        }
+    ],
+    "version": 4
+}

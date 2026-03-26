@@ -1,0 +1,30 @@
+# --- Build Artifacts (The "Noise") ---
+# Ignore the entire bin folder and common binary extensions
+bin/
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+*.d
+
+# --- IDE Configuration (The "Signal") ---
+# 1. Ignore EVERYTHING inside .vscode by default
+.vscode/*
+
+# 2. Specifically ALLOW (Whitelist) these critical logic files
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json
+!.vscode/settings.json
+
+# 3. Allow the workspace manager file
+!Tics.code-workspace
+
+# --- System Garbage ---
+.DS_Store
+Thumbs.db
+desktop.ini
