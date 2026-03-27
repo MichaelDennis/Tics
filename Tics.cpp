@@ -1896,30 +1896,11 @@ void TicsSystemTaskClass::Task()
 //-----------------------------------------------------------------------------
 void TicsUtilsClass::MemCopy(void* dst, void* src, int numChars)
 {
-    int i;
-    int temp;
+    char* d = (char*) dst;
+    char* s = (char*) src;
 
-    // Consolidate the lower bits.
-    temp = (int)dst | (int)src | numChars;
-
-    // If all of the above are multiples of sizeof(int), (lower 2 bits are 0), then copy int's.
-    if ((temp & (sizeof(int) - 1)) == 0) {
-
-        int numInts = numChars / (int) sizeof(int);
-        int* d = (int*) dst;
-        int* s = (int*) src;
-
-        for (i = 0; i < numInts; i++) {
-            *d++ = *s++;
-        }
-    }
-    else {
-        char* d = (char*) dst;
-        char* s = (char*) src;
-
-        for (i = 0; i < numChars; i++) {
-            *d++ = *s++;
-        }
+    for (int i = 0; i < numChars; i++) {
+        *d++ = *s++;
     }
 }
 
