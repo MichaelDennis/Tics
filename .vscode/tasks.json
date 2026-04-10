@@ -6,13 +6,13 @@
             "label": "Build Tics to Bin (m32)",
             "command": "/usr/bin/g++",
             "args": [
+                "-I${workspaceFolder}/Source",
                 "-g",
                 "-m32",
                 "${file}",
-                "${workspaceFolder}/Tics.cpp",
-                "-I${workspaceFolder}",
+                "${workspaceFolder}/Source/Tics.cpp",
                 "-o",
-                "${workspaceFolder}/bin/${fileBasenameNoExtension}"
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}"
             ],
             "options": {"cwd": "${workspaceFolder}"},
             "problemMatcher": ["$gcc"],

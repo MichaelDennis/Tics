@@ -5,12 +5,15 @@
             "name": "Debug Tics (m32)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/${fileBasenameNoExtension}",
+            "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}",
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "preLaunchTask": "Build Tics to Bin (m32)",
-            "miDebuggerPath": "/usr/bin/gdb"
+            "miDebuggerPath": "/usr/bin/gdb",
+            "sourceFileMap": {
+                "/home/mdm/projects/Tics": "${workspaceFolder}"
+            }
         }
     ]
 }

@@ -1,6 +1,6 @@
 # --- Build Artifacts (The "Noise") ---
 # Ignore the entire bin folder and common binary extensions
-bin/
+Bin/
 *.o
 *.obj
 *.exe
