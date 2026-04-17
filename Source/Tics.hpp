@@ -41,8 +41,8 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Typedefs
 //-----------------------------------------------------------------------------
-typedef unsigned int StackType;
-typedef int32_t TimerTickType;
+typedef unsigned long StackType;
+typedef unsigned long TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Defines
@@ -172,6 +172,10 @@ namespace TicsNameSpace {
         ErrorTaskIdMismatchCorruptedMsg = 1062,
         ErrorNullPointer = 1063,
         ErrorMaxAllowedMsgsInRecv = 1064,
+        ErrorAttemptToDeleteANullNode = 1065,
+        ErrorAttemptToDeleteANonExistentNode = 1066,
+        ErrorNullMsgPtrInCancel = 1067,
+        ErrorBadTimerTickCount = 1068,
     };
 };
 
@@ -336,6 +340,35 @@ public:
         bool Is(int msgNum)
     {
         return msgNum == MsgNum ? true : false;
+    }
+};
+
+//-----------------------------------------------------------------------------
+/// MsgInfoClass
+///
+///  Contains information needed to cancel a msg.
+//-----------------------------------------------------------------------------
+class MsgInfoClass {
+public:
+    // Data
+    // The Id number, (not the msgNum), of the msg when it was first created.
+    int Id;
+    // A pointer to the msg when it was first created.
+    MsgClass * OriginalMsg;
+
+    // Functions
+    void RegisterOriginalMsg(MsgClass* msg)
+    {
+        // Save the msg Id.
+        Id = msg->Id;
+
+        // Save a pointer to the original msg.
+        OriginalMsg = msg;
+    }
+
+    bool IsOriginalMsg(MsgClass* msg)
+    {
+        return (msg == OriginalMsg && msg->Id == Id);
     }
 };
 
@@ -605,9 +638,7 @@ public:
     bool TaskExists(int id);
     // Deletes a sent msg with the given node id. Returns true if the 
     // msg was found and deleted.
-    bool Cancel(int nodeId);
-    // Deletes a sent msg. Returns true if the msg was found and deleted.
-    bool Cancel(MsgClass* msg);
+    bool Cancel(MsgClass* msg, int nodeId);
     // Adds the task to the Ready List. If the task arg is 0, then this task is used.
     void Schedule(TaskClass* task = 0);
     // Send a msg to another task.
@@ -867,7 +898,8 @@ public:
 class MemMgrClass {
 private:
     // Data
-    char* Memory;
+    char* MemoryStart;
+    char* MemoryEnd;
     int CurrentOffset;
     int MemorySizeInBytes;
     int NumBytesAvailable;
@@ -919,6 +951,7 @@ namespace TicsNameSpace {
     extern void Schedule(TaskClass* task, bool inIsr);
     extern void Send(TaskClass* task, FifoClass* fifo, void* data);
     extern MsgListClass ReadyList;
+    extern DelayListClass DelayList;
     extern FlagsClass TicsFlags;
 };
 

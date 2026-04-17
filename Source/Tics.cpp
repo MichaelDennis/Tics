@@ -675,7 +675,7 @@ void DelayListClass::CheckForTimeouts()
         nextMsg = (MsgClass*)nextNode;
 
         // If we're past the delayed msg end time, then dispatch it.
-        if (currentTime >= msg->EndTime) {
+        if ((int32_t)(currentTime - msg->EndTime) >= 0) {
             // Remove the delayed msg from the delay list.
             Remove(msg);
 
@@ -935,7 +935,7 @@ void TaskClass::Wait(FifoClass * fifo, void * data)
         fifo->Remove(data);
     }
     else {
-        // Suspend until the isr schedules the task.
+        // Suspend until the isr sends the msg to the task.
         Suspend();
     }
 }
@@ -1003,8 +1003,18 @@ void TaskListClass::RemoveTaskReferences(TaskClass* task, bool removeTheTaskItse
 //-----------------------------------------------------------------------------
 TimerTickType TicsNameSpace::ReadTickCount()
 {
+    TimerTickType tickCount;
+    TimerTickType msTickCount;
+
+    // Read the currrent tick count.
+    tickCount = (TimerTickType) clock();
+
+    // Convert to milliseconds.
+    msTickCount = tickCount / 1000;
+
     // Replace this with your own hardware clock time.
-    return (TimerTickType) clock();
+
+    return msTickCount;
 }
 
 //-----------------------------------------------------------------------------
@@ -1256,6 +1266,12 @@ void TaskClass::DeleteFromMsgList(TaskClass* task)
 //-----------------------------------------------------------------------------
 MsgClass * TaskClass::StartTimer(int numTicks, int priority, int msgNum)
 {
+    // Check for out of bounds tick count.
+    if (numTicks <= 0) {
+        ErrorHandler.Report(ErrorBadTimerTickCount);
+        return 0;
+    }
+    
     // Send a delayed msg to this task.
     return Send(this, msgNum, 0, 0, numTicks, priority);
 }
@@ -1442,50 +1458,40 @@ MsgClass* TaskClass::Wait(int* msgNumArray, int numMsgs)
 //-----------------------------------------------------------------------------
 /// \brief Delete a previously sent msg.
 ///
-/// Attempt to a remove previously sent msg with msg id msgId from the system. 
+/// Attempt to a remove previously sent msg with the given node Id from the system. 
 ///
 /// \param nodeId - Obtainable from the msg returned by Send() (msg->Id).
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
-bool TaskClass::Cancel(int nodeId)
+bool TaskClass::Cancel(MsgClass* msg, int nodeId)
 {
-    // If the msg has not been deleted, it should be in one of the following
-    // lists. Once it is found in one of the lists, there is no need to check
-    // the others.
+    // Check for a null msg pointer.
+    if (msg == 0) {
+        ErrorHandler.Report(ErrorNullMsgPtrInCancel);
+        return false;
+    }
+    
+    // The receiver task's msg list.
+    MsgListClass* msgList = &msg->Receiver->MsgList;
 
+    // If the msg has not been deleted, it should be in one of the following
+    // lists. If the msg has not been found in any of these 
     // Check the Delay List.
     if (DelayList.Delete(nodeId)) {
         return true;
     }
     // Check the Ready List.
-    else if (ReadyList.ListClass::Delete(nodeId)) {
+    else if (ReadyList.Delete(nodeId)) {
         return true;
     }
-    // Check the Task List.
-    else if (TaskList.Delete(nodeId)) {
+    // Check the receiver task's msg list.
+    else if (msgList->Delete(nodeId)) {
         return true;
     }
     else {
         return false;
     }
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Delete a previously sent msg.
-///
-/// Attempt to remove the msg from the system. Use this function only if
-/// you know the msg has not been deleted. If it might be deleted, use the
-/// version of CancelMsg that takes a msg Id as a parameter.
-///
-/// \param msg - Obtainable from the msg returned by Send().
-///
-/// \return true if the msg was canceled, otherwise false.
-//-----------------------------------------------------------------------------
-bool TaskClass::Cancel(MsgClass * msg)
-{
-    // Cancel the msg based on its msg id.
-    return Cancel(msg->Id);
 }
 
 //-----------------------------------------------------------------------------
@@ -2347,7 +2353,7 @@ MemNodeClass * MemMgrClass::AllocateFromMemory(int numBytesRequested)
     if (numBytesToAllocate <= NumBytesAvailable) {
 
         // The current offset is the start of the allocated memory.
-        p = &Memory[CurrentOffset];
+        p = &MemoryStart[CurrentOffset];
 
         // Update the offset.
         CurrentOffset += numBytesToAllocate;
@@ -2374,6 +2380,17 @@ MemNodeClass * MemMgrClass::AllocateFromMemory(int numBytesRequested)
 //-----------------------------------------------------------------------------
 void MemMgrClass::DeAllocate(void* p)
 {
+    // Check for an attempt to delete a null node.
+    if (p == 0) {
+        ErrorHandler.Report(ErrorAttemptToDeleteANullNode);
+        return;
+    }
+
+    // Check if p is outside the allocation memory pool.
+    if (p < MemoryStart || p > MemoryEnd) {
+        ErrorHandler.Report(ErrorAttemptToDeleteANonExistentNode);
+        return;
+    }
     // Point to the top of the node.
     MemNodeClass * node = (MemNodeClass*)((char *)p - sizeof(NodeHeaderClass));
 
@@ -2394,12 +2411,14 @@ void MemMgrClass::DeAllocate(void* p)
 //-----------------------------------------------------------------------------
 /// \brief Memory block manager constructor.
 ///
-/// \param memory - A pointer to the space to be used for memory block allocation.
+/// \param memoryStart - A pointer to the space to be used for memory block allocation.
 /// \param memorySizeInBytes - The size of memory pointed to by parameter 1.
 //-----------------------------------------------------------------------------
-MemMgrClass::MemMgrClass(void * memory, int memorySizeInBytes) :
-    Memory((char *)memory), CurrentOffset(0),
-    MemorySizeInBytes(memorySizeInBytes), NumBytesAvailable(0)
+MemMgrClass::MemMgrClass(void * memoryStart, int memorySizeInBytes) :
+    MemoryStart((char *)memoryStart), 
+    MemoryEnd(((char*) memoryStart + memorySizeInBytes) - 1), 
+    CurrentOffset(0),
+    MemorySizeInBytes(memorySizeInBytes), NumBytesAvailable(memorySizeInBytes)
 {
 }
 

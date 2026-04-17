@@ -124,7 +124,7 @@ void HelloTaskClass::Task(void)
         // Output the string "Hello World!World.cpp" followed by a counter value.
         cout << "Hello World! " << i++ << endl;
         // Sleep for one second.
-        Pause(oneSecond);
+        Pause(1000);
     }
 }
 
