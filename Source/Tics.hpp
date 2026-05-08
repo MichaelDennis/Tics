@@ -41,8 +41,8 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Typedefs
 //-----------------------------------------------------------------------------
-typedef unsigned long StackType;
-typedef unsigned long TimerTickType;
+typedef unsigned int StackType;
+typedef unsigned int TimerTickType;
 
 //-----------------------------------------------------------------------------
 // Defines
@@ -52,15 +52,23 @@ typedef unsigned long TimerTickType;
 // Macros
 //-----------------------------------------------------------------------------
 #define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
-
+#define MsgHasTimedOut(presentTime, endTime) ((((int32_t)(presentTime)) - (endTime)) >= 0)
+#define TEST1 ((int32_t)currentTime) - msg->EndTime
 //-----------------------------------------------------------------------------
 // Namespaces
 //-----------------------------------------------------------------------------
 namespace TicsNameSpace {
 
+//-----------------------------------------------------------------------------
+// Namespaces enums
+//-----------------------------------------------------------------------------
     enum TicsNamespaceEnum {
-        // The size of the Tics dynamic memory space.
-        SizeMemoryMgr = 0x100000,
+        // The maximum allowed size of a timer.
+        MaxTimerSize = (0x80000000 - 1),
+        // The number of system clock ticks per millisecond.
+        NumSystemClocksPerMs = 1,
+        // The number of ints in the Tics dynamic memory space.
+        SizeMemoryMgr = 0x4000,
         // The default number of interrupt fifo slots.
         NumInterruptFifoSlots = 16,
         // The default size for an interrupt fifo slot.
@@ -72,7 +80,7 @@ namespace TicsNameSpace {
         // of an array.
         ArrayEndMarker = 99999,
          // TicsNameSpace flags.
-        SafeModeFlag = 1, WatchDogFlag = 2
+        SafeModeFlag = 1, WatchDogFlag = 2, SimulationMode = 4
    };
 
     // Users can use any priority between LowPriority and HighPriority. 
@@ -82,8 +90,8 @@ namespace TicsNameSpace {
         MediumPriority = 3000, MediumHighPriority = 3001, HighPriority = 4000, HeadPriority = 10000
     };
 
-    // Tics reserves msg numbers 0 to 999. Users can create their own
-    // msg numbers in the range Users can define their own msg numbers 
+    // Tics reserves msg numbers 0 to 999. 
+    // Users can define their own msg numbers 
     // in the range MinUserMsgNum to MaxUserMsgNum.
     enum MsgNumEnum {
         // This must be the first and smallest defined msg number.
@@ -195,7 +203,7 @@ class MemMgrClass;
 //-----------------------------------------------------------------------------
 // TicsBaseClass
 //
-// Base class. Various classes are derived from the base class.
+// Base class. Various classes are derived from the TicsBaseClass.
 //-----------------------------------------------------------------------------
 class TicsBaseClass {
 public:
@@ -233,12 +241,11 @@ public:
     NodeClass* Prev;
     // 
     int Data;
-    void* Ptr;
     int ListId = 0;
     int Priority;
     
-    NodeClass(int data = 0, void* ptr = 0, int priority = MediumPriority) : 
-        Next(0), Prev(0), Data(data), Ptr(ptr), ListId(0), Priority(priority)
+    NodeClass(int data = 0, int priority = MediumPriority) : 
+        Next(0), Prev(0), Data(data), ListId(0), Priority(priority)
     {
     }
 
@@ -299,6 +306,8 @@ public:
     int ReceiverId;
     // The msg number which will tell the receiving task what to do.
     int MsgNum;
+    // General msg data. Can be used or ignored.
+    int Data;
     // The msg will by sent after waiting "Delay" system ticks.If Delay is 0, send immediately.
     TimerTickType Delay;
     // The system tick time at which the msg will be sent (Current time + Delay).
@@ -322,8 +331,6 @@ public:
         int msgNum = StartMsg,
         // Optional msg data.
         int data = 0,
-        // Optional pointer to msg data.
-        void* ptr = 0,
         // The system tick time at which the msg will be sent (Current time + Delay).
         int delay = 0,
         // The priority of the msg.
@@ -649,8 +656,6 @@ public:
         int msgNum = NullMsg,
         // Optional msg data.
         int data = 0,
-        // Optional pointer to msg data.
-        void* ptr = 0,
         // The number of ticks to wait before sending out the msg.
         int delay = 0,
         // The msg will be added to the Ready List according to its priority.
@@ -665,8 +670,6 @@ public:
         int msgNum = NullMsg,
         // Optional msg data.
         int data = 0,
-        // Optional pointer to msg data.
-        void* ptr = 0,
         // The number of ticks to wait before sending out the msg.
         int delay = 0,
         // The msg will be added to the Ready List according to its priority.
@@ -683,8 +686,6 @@ public:
         int msgNum = NullMsg,
         // Optional msg data.
         int data = 0,
-        // Optional pointer to msg data.
-        void* ptr = 0,
         // The number of ticks to wait before sending out the msg.
         int delay = 0,
         // The msg will be added to the Ready List according to its priority.
