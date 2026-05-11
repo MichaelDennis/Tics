@@ -2,7 +2,7 @@
 
 MIT License
 
-Copyright (c) 2025 Michael Dennis McDonnell
+Copyright (c) 2026 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -23,7 +23,7 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
-// Copyright (c) 2025, Tics Realtime (Michael Dennis McDonnell)
+// Copyright (c) 2026, Tics Realtime (Michael Dennis McDonnell)
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
@@ -41,7 +41,10 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Typedefs
 //-----------------------------------------------------------------------------
+
+// The stack element type.
 typedef unsigned int StackType;
+// The timer counter element type.
 typedef unsigned int TimerTickType;
 
 //-----------------------------------------------------------------------------
@@ -54,6 +57,7 @@ typedef unsigned int TimerTickType;
 #define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
 #define MsgHasTimedOut(presentTime, endTime) ((((int32_t)(presentTime)) - (endTime)) >= 0)
 #define TEST1 ((int32_t)currentTime) - msg->EndTime
+
 //-----------------------------------------------------------------------------
 // Namespaces
 //-----------------------------------------------------------------------------
@@ -68,7 +72,7 @@ namespace TicsNameSpace {
         // The number of system clock ticks per millisecond.
         NumSystemClocksPerMs = 1,
         // The number of ints in the Tics dynamic memory space.
-        SizeMemoryMgr = 0x4000,
+        SizeMemMgr = 0x4000,
         // The default number of interrupt fifo slots.
         NumInterruptFifoSlots = 16,
         // The default size for an interrupt fifo slot.
@@ -220,13 +224,22 @@ public:
     }
 
     // TicsBaseClass destructor.
-    ~TicsBaseClass(void)
+   virtual ~TicsBaseClass(void)
     {
         // Bump the Id to indicate that the object has been deleted.
         Id++;
     }
+
+    // Creates a new instance of this class.
+    void* operator new(size_t size);
+
+    // Deletes an instance of this class.
+    void operator delete(void* p);
 };
 
+//-----------------------------------------------------------------------------
+/// \brief The base class from which all list node classes are derived.
+//-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 // NodeClass
 // 
@@ -239,9 +252,12 @@ public:
     NodeClass* Next;
     // Pointer to the previous node in the list.
     NodeClass* Prev;
-    // 
+    // Optional msg data for usage by users.
     int Data;
+    // A unique number that identifies a list that this node is in. 
+    // A ListId of 0 means the node is not contained in a list.
     int ListId = 0;
+    // A number that determines where in a list the node is inserted.
     int Priority;
     
     NodeClass(int data = 0, int priority = MediumPriority) : 
@@ -249,13 +265,10 @@ public:
     {
     }
 
-    virtual ~NodeClass(void)
-    {
-    }
-
     bool ListIdIsValid(int listId)
     {
-        // A ListId value of 0 means that the msg is not in a list.
+        // Returns true if this node is (1) in the list whose list id is
+        // listId or (2) is not in a list, otherwise, false.
         return ListId == 0 || listId == ListId;
     }
 
@@ -275,7 +288,7 @@ public:
     }
 };
 
-class FlagsClass {
+class FlagsClass : public TicsBaseClass {
 public:
     // Data
     int Flags;
@@ -295,59 +308,64 @@ public:
 
 
 //-----------------------------------------------------------------------------
-/// MsgClass
+/// \class MsgClass
 ///
-///  Used to send msgs between tasks.
+/// \brief Represents a message sent between tasks in the Tics system.
+///
+/// A MsgClass encapsulates all information required for inter‑task
+/// communication, including routing, timing, priority, and optional data.
+/// Messages are allocated from fixed block pools and deleted automatically
+/// by the scheduler after the receiving task suspends.
 //-----------------------------------------------------------------------------
+
 class MsgClass : public NodeClass {
-    // Data
+
 public:
-    // The id of the task that the msg will be sent to.
+    /// The id of the task that will receive this message.
     int ReceiverId;
-    // The msg number which will tell the receiving task what to do.
+
+    /// The message number indicating the action requested of the receiver.
     int MsgNum;
-    // General msg data. Can be used or ignored.
+
+    /// Optional message data (usage is task‑specific).
     int Data;
-    // The msg will by sent after waiting "Delay" system ticks.If Delay is 0, send immediately.
+
+    /// Delay in system ticks before the message is delivered (0 = immediate).
     TimerTickType Delay;
-    // The system tick time at which the msg will be sent (Current time + Delay).
+
+    /// Absolute system tick time when the message should be delivered.
     TimerTickType EndTime;
-    // The task that is sending the msg.
+
+    /// The task sending the message.
     TaskClass* Sender;
-    // The task to which the msg will be sent.
+
+    /// The task receiving the message.
     TaskClass* Receiver;
 
-    // Functions
-public:
-    // Returns a block from the appropriate fixed block pool.
+    MsgClass(TaskClass* receiver,
+             int msgNum = StartMsg,
+             int data = 0,
+             int delay = 0,
+             int priority = MediumPriority,
+             TaskClass* sender = 0);
+
+    /// Destructor.
+    ~MsgClass();
+
+    /// Allocates a message from the fixed block pool.
     void* operator new(size_t size);
-    // Returns a block to the appropriate fixed block pool.
+
+    /// Returns a message block to the fixed block pool.
     void operator delete(void* p);
-    // MsgClass constructor.
-    MsgClass(
-        // The task to which the msg will be sent.
-        TaskClass* receiver,
-        // The default msg that will be sent to the receiver task.
-        int msgNum = StartMsg,
-        // Optional msg data.
-        int data = 0,
-        // The system tick time at which the msg will be sent (Current time + Delay).
-        int delay = 0,
-        // The priority of the msg.
-        int priority = MediumPriority,
-        // The sender of the msg.
-        TaskClass* sender = 0);
-        //  MsgClass destructor. 
-        virtual ~MsgClass();
-        // Performs dynamic initialization of the msg.
-        void Init();
-        // Validates the args.
-        void CheckParameters(bool fullCheck = true);
-        // Returns true if the arg matches the msg number.
-        bool Is(int msgNum)
-    {
-        return msgNum == MsgNum ? true : false;
-    }
+
+    /// Performs dynamic initialization of the message.
+    void Init();
+
+    /// Validates constructor arguments.
+    void CheckParameters(bool fullCheck = true);
+
+    /// Returns true if the message number matches.
+    bool Is(int msgNum) { return msgNum == MsgNum; }
 };
 
 //-----------------------------------------------------------------------------
@@ -355,8 +373,10 @@ public:
 ///
 ///  Contains information needed to cancel a msg.
 //-----------------------------------------------------------------------------
-class MsgInfoClass {
-public:
+
+class MsgInfoClass : public TicsBaseClass {
+
+ public:
     // Data
     // The Id number, (not the msgNum), of the msg when it was first created.
     int Id;
@@ -499,7 +519,7 @@ public:
 //
 // This class manages a task's stack.
 //-----------------------------------------------------------------------------
-class StackClass {
+class StackClass : public TicsBaseClass {
 public:
     // Data
     enum StackClassEnum {
@@ -546,7 +566,7 @@ public:
 //
 // Manages a circular fifo queue.
 //-----------------------------------------------------------------------------
-class FifoClass {
+class FifoClass : public TicsBaseClass {
 public:
     // Data
 
@@ -623,6 +643,7 @@ public:
     MsgListClass MsgList;
 
     // Functions
+    
     // TaskClass constructor
     TaskClass(
         // Optional task name.
@@ -633,12 +654,13 @@ public:
         int flags = (ScheduleTaskOnCreationFlag),
         // A stack size of 0 gets the default stack size.
         int stackSizeInBytes = 0);
-
-
-    // TaskClass destructor.
-    virtual ~TaskClass(void);
-    // The task must be implemented by the user.
+    
+    // TaskClass destructor
+    ~TaskClass();
+        
+    // The Tics task function must be implemented by the user.
     virtual void Task() = 0;
+
     // Returns true if the task exists.
     bool TaskExists(TaskClass* receiver = 0);
     // Returns true if the task exists.
@@ -738,7 +760,6 @@ public:
         int numMsgs);
     // Suspend the current task and resume the task at the front of the Ready List.
     void Suspend();
-
     // Save the current task's context and restore the newTask's context.
     void SwitchTasks(
         // The task to switch to.
@@ -749,7 +770,7 @@ public:
         TaskClass* task);
     // Creates a new instance of this class.
     void* operator new(size_t size);
-    // Deletes as instance of this class.
+    // Deletes an instance of this class.
     void operator delete(void* p);
     // Returns true if any of the bits in the mask are true. 
     bool GetFlag(int mask) {
@@ -777,7 +798,7 @@ public:
 };
 
 // All errors call the Report() method.
-class ErrorHandlerClass {
+class ErrorHandlerClass : public TicsBaseClass {
 public:
     // Data
     int ErrorNum;
@@ -804,16 +825,9 @@ public:
     void Task();
 };
 
-// This class provides utility functions used internally by Tics.
-class TicsUtilsClass {
-public:
-    static void MemCopy(void* dst, void* src, int numChars);
-    static void MemSet(void* dst, int numChars, char data);
-};
-
 // Each node in the memory mgr list, points to a memory pool of fixed size 
 // memory blocks.
-class NodeHeaderClass {
+class NodeHeaderClass : public TicsBaseClass {
 public:
     // Data
     enum NodeHeaderClassEnum {
@@ -823,16 +837,16 @@ public:
     int Signature;
     // Number of bytes requested 
     int NumBytesRequested;
-    MemMgrClass* MemoryMgrPool;
+    MemMgrClass* MemMgrPool;
     MemNodeClass* Next;
 
     // Functions
-    void Initialize(int numBytesRequested, MemMgrClass* memoryMgrPool)
+    void Initialize(int numBytesRequested, MemMgrClass* MemMgrPool)
     {
         Next = 0;
         Signature = SignatureValue;
         NumBytesRequested = numBytesRequested;
-        MemoryMgrPool = memoryMgrPool;
+        MemMgrPool = MemMgrPool;
     }
 
     bool SignatureMatches()
@@ -840,9 +854,9 @@ public:
         return Signature == SignatureValue ? true : false;
     }
 
-    bool MemoryMgrMatches(MemMgrClass* memoryMgrPool)
+    bool MemMgrMatches(MemMgrClass* MemMgrPool)
     {
-        return MemoryMgrPool == memoryMgrPool ? true : false;
+        return MemMgrPool == MemMgrPool ? true : false;
     }
 };
 
@@ -852,8 +866,8 @@ public:
     unsigned int StartOfUserArea;
 
     // Functions
-    MemNodeClass(int numBytesRequested, MemMgrClass* memoryMgrSource) : StartOfUserArea(0) {
-        Initialize(numBytesRequested, memoryMgrSource);
+    MemNodeClass(int numBytesRequested, MemMgrClass* MemMgrSource) : StartOfUserArea(0) {
+        Initialize(numBytesRequested, MemMgrSource);
     }
 
     void* UserArea()
@@ -867,7 +881,7 @@ public:
     }
 };
 
-class MemNodeListClass {
+class MemNodeListClass : public TicsBaseClass {
 private:
     // Data
     MemNodeClass* Head;
@@ -896,7 +910,7 @@ public:
 // The MemMgrClass manages a linked list of MemNodeClass objects, each of which
 // contains a list of 
 //-----------------------------------------------------------------------------
-class MemMgrClass {
+class MemMgrClass : public TicsBaseClass {
 private:
     // Data
     char* MemoryStart;
@@ -921,7 +935,7 @@ public:
 //-----------------------------------------------------------------------------
 // InterruptTableRowClass
 //-----------------------------------------------------------------------------
-class InterruptTableRowClass {
+class InterruptTableRowClass : public TicsBaseClass {
 public:
 
     // Data
@@ -955,6 +969,7 @@ namespace TicsNameSpace {
     extern DelayListClass DelayList;
     extern FlagsClass TicsFlags;
 };
+
 
 //-----------------------------------------------------------------------------
 // End guard

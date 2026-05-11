@@ -65,17 +65,19 @@ namespace TicsNameSpace {
 
     // Msgs are created by allocating a memory block from this area.
     // An instance of MemMgrClass class is created to manage this space.
-    // (See the definition of MemoryMgr below).
-    int MemoryMgrSpace[SizeMemoryMgr / sizeof(int)];
+    // (See the definition of MemMgr below).
+    int MemMgrSpace[SizeMemMgr / sizeof(int)];
 
     // Create an instance of MemMgrClass to allow for allocation and
     // deallocation of memory blocks using the space provided by
-    // MemoryMgrSpace (defined above). You can think of the MemMgrClass
+    // MemMgrSpace (defined above). You can think of the MemMgrClass
     // as being similar to malloc(), with member functions to allocate and
     // deallocate memory. A chunk of memory needs to be provided to the
     // MemMgrClass constructor, from which blocks of memory are carved
     // out when needed. 
-    MemMgrClass MemoryMgr(MemoryMgrSpace, SizeMemoryMgr);
+    MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
+    // MemMgrClass *MemMgr;
+    // MemMgr = new MemMgrClass(MemMgrSpace, SizeMemMgr);
 
     // Various flags used by Tics.
     FlagsClass TicsFlags(SafeModeFlag | SimulationMode);
@@ -110,7 +112,6 @@ namespace TicsNameSpace {
  
     // All errors are handled by calling ErrorHandler.Report().
     ErrorHandlerClass ErrorHandler;
-
 
     // The Tics user increments this counter once per ms.
     // If TicsFlags.SimualtioMode is true, then this timer is incremented
@@ -178,7 +179,7 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
     StackPadSizeInBytes = stackPadSizeInBytes;
 
     // Allocate stack memory.
-    StackBottom = (StackType *)MemoryMgr.Allocate(StackSizeInBytes);
+    StackBottom = (StackType *)MemMgr.Allocate(StackSizeInBytes);
 
     // Compute stack top pointer. (The SP is decremented first, bringing it 
     // to the top of the stack, so no need to subtract 1 in the equation below.)
@@ -194,7 +195,7 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
 StackClass::~StackClass(void)
 {
     // Put the stack memory back on the proper free list.
-    MemoryMgr.DeAllocate(StackBottom);
+    MemMgr.DeAllocate(StackBottom);
 }
 
 //-----------------------------------------------------------------------------
@@ -515,7 +516,7 @@ void ListClass::Insert(NodeClass* a, NodeClass* b)
         ErrorHandler.Report(ErrorMsgListIsFullCannotInsert);
     }
 
-    //MDM
+    // Check for any issues before inesrting the node a after b..
     DoInsertSafetyChecks(a, b);
 
     // Insert the msg.
@@ -1192,7 +1193,7 @@ TaskClass::TaskClass(
 /// \brief TaskClass destructor. Removes all references to this task, then 
 /// Removes the task itself from the task list.
 //-----------------------------------------------------------------------------
-TaskClass::~TaskClass(void)
+TaskClass::~TaskClass()
 {
     // Make sure the task exists.
     if (TaskExists(this) == false) {
@@ -1367,8 +1368,10 @@ MsgClass* TaskClass::Recv(int msgNum)
 
 //-----------------------------------------------------------------------------
 /// \brief Check each msg number in the array and check if it is in the
-/// task's msg list, and if so, return a pointer to it, otherwise,
-/// return a null pointer.
+/// task's msg list.
+///
+/// Note: this function is experimental. 
+/// \return Return a pointer to the found msg, otherwise, 0.
 //-----------------------------------------------------------------------------
 
 MsgClass* TaskClass::Recv(int* msgNumArray, int numMsgs)
@@ -1428,6 +1431,7 @@ MsgClass* TaskClass::Wait(int msgNum)
 //-----------------------------------------------------------------------------
 /// \brief Wait for any of the msgs listed in an array.
 ///
+/// Note: this function is experimental. 
 /// If the msg is found, then remove it from the list, and return a pointer 
 /// to it, otherwise, suspend and wait to be rescheduled, which will occur 
 /// when another msg is sent to this task, at which point the task will resume,
@@ -1610,7 +1614,7 @@ MsgClass::MsgClass(
 //-----------------------------------------------------------------------------
 /// \brief MsgClass destructor.
 //-----------------------------------------------------------------------------
-MsgClass::~MsgClass(void)
+MsgClass::~MsgClass()
 {
     // Check for corruption.
     if (Receiver != 0 && ReceiverId != Receiver->Id) {
@@ -1656,7 +1660,7 @@ void MsgClass::CheckParameters(bool fullCheck)
 void * TaskClass::operator new(size_t size)
 {
     // Allocate a block of memory for the task object.
-    void * p = MemoryMgr.Allocate((int) size);
+    void * p = MemMgr.Allocate((int) size);
 
     return p;
 }
@@ -1669,7 +1673,7 @@ void * TaskClass::operator new(size_t size)
 void TaskClass::operator delete(void * p)
 {
     // Deallocate the task memory block.
-    MemoryMgr.DeAllocate(p);
+    MemMgr.DeAllocate(p);
 }
 
 
@@ -1683,7 +1687,7 @@ void TaskClass::operator delete(void * p)
 void * MsgClass::operator new(size_t size)
 {
     // Allocate a block of memory for the msg object.
-    void * p = MemoryMgr.Allocate((int) size);
+    void * p = MemMgr.Allocate((int) size);
 
     return p;
 }
@@ -1696,7 +1700,7 @@ void * MsgClass::operator new(size_t size)
 void MsgClass::operator delete(void * p)
 {
     // Deallocate the msg memory block.
-    MemoryMgr.DeAllocate(p);
+    MemMgr.DeAllocate(p);
 }
 
 //-----------------------------------------------------------------------------
@@ -1709,7 +1713,7 @@ void MsgClass::operator delete(void * p)
 void * FifoClass::operator new(size_t size)
 {
     // Allocate space for the FifoClass object.
-    void * p = MemoryMgr.Allocate((int) size);
+    void * p = MemMgr.Allocate((int) size);
 
     return p;
 }
@@ -1722,7 +1726,7 @@ void * FifoClass::operator new(size_t size)
 void FifoClass::operator delete(void * p)
 {
     // Deallocate the FifoClass memory block.
-    MemoryMgr.DeAllocate(p);
+    MemMgr.DeAllocate(p);
 }
 
 
@@ -1755,33 +1759,6 @@ MsgClass* TaskClass::Send(
     return Send(msg);
 }
 
-//-----------------------------------------------------------------------------
-/// \brief Send a reference to a msg to a task.
-///
-/// \param receiver - A reference to the task to receive the msg.
-/// \param msgNum - The msg number.
-/// \param data - Integer data associated with the msg, if any.
-/// \param delay - The number of ticks to wait before sending the msg, if any.
-/// \param priority - Determines where in the receiver's msg list the msg is inserted.
-/// \param sender - The sender of the msg (used for replying).
-///
-/// \return A pointer to the msg that was sent.
-///
-/// If a task is statically allocated you can refer to it with a reference,
-/// but you have to make sure that the instantiation of the task happens
-/// after Tics globals have been instantiated.
-//-----------------------------------------------------------------------------
-MsgClass* TaskClass::Send(
-TaskClass& receiver,
-int msgNum,
-int data,
-int delay,
-int priority,
-TaskClass* sender)
-{
-    // Send the msg using the version of Send that accepts a pointer (instead of a reference) to the task.
-    return Send(&receiver, msgNum, data, delay, priority, sender);
-}
 
 //-----------------------------------------------------------------------------
 /// \brief Send a msg to a task.
@@ -1966,7 +1943,7 @@ FifoClass::FifoClass(
     if (FifoSpace == 0) {
 
         // Allocate fifo space.
-        FifoSpace = MemoryMgr.Allocate(FifoSizeInBytes);
+        FifoSpace = MemMgr.Allocate(FifoSizeInBytes);
 
         // Check for errors.
         if (FifoSpace == 0) {
@@ -2003,7 +1980,7 @@ FifoClass::~FifoClass()
 {
     // Free the fifo space that was allocated in the constructor.
     if (FifoSpaceWasAllocated) {
-        MemoryMgr.DeAllocate(FifoSpace);
+        MemMgr.DeAllocate(FifoSpace);
     }
 }
 
@@ -2401,7 +2378,7 @@ void MemMgrClass::DeAllocate(void* p)
     }
 
     // Make sure that we're deallocating to the proper pool.
-    if (node->MemoryMgrMatches(this) == false) {
+    if (node->MemMgrMatches(this) == false) {
         ErrorHandler.Report(ErrorAttemptToDeallocateToTheWrongPool);
     }
 
@@ -2481,12 +2458,6 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
         ErrorHandler.Report(ErrorMsgNotDefined);
     }
 
-    /* MDM
-    // Msgs must always define a sender and receiver.
-    if (a->Sender == 0 && a->Receiver == 0) {
-        ErrorHandler.Report(ErrorSenderOrReceiverNotDefined);
-    }
-
     // If msg a is already in a list, then we can't insert it.
     if (a->IsInAList()) {
         ErrorHandler.Report(ErrorMsgIsAlreadyInAList);
@@ -2496,8 +2467,6 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
     if (b->IsInAList() == false) {
         ErrorHandler.Report(ErrorDestinationMsgIsNotInAList);
     }
-
-    */
 
     // Msgs a and b cannot both point to the same msg.
     if (a == b) {
@@ -2514,7 +2483,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
         ErrorHandler.Report(ErrorDestinationMsgCannotBeTheTail);
     }
 
-    // Make sure that the msg has the correct list id.
+    // Make sure that the msg a is in this list by comparing msg a's list id to this->
     if (a->ListIdIsValid(Id) == false) {
         ErrorHandler.Report(ErrorListIdIsInvalid);
     }
@@ -2542,3 +2511,30 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
             return true;
         }
     }
+
+ //-----------------------------------------------------------------------------
+/// \brief Allocate space for a TicsBaseClass object.
+///
+/// \param size - The number of bytes to allocate.
+///
+/// \return A pointer to the allocated memory.
+//-----------------------------------------------------------------------------
+void * TicsBaseClass::operator new(size_t size)
+{
+    // Allocate a block of memory for the task object.
+    void * p = MemMgr.Allocate((int) size);
+
+    return p;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Free up space for a TicsBaseClass object.
+///
+/// \param p - A pointer to the allocated space.
+//-----------------------------------------------------------------------------
+void TicsBaseClass::operator delete(void * p)
+{
+    // Deallocate the task memory block.
+    MemMgr.DeAllocate(p);
+}
+

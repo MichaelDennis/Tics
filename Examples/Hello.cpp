@@ -32,7 +32,6 @@ SOFTWARE.
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
-#include "TicsTaskSwitch.hpp"
 #include <iostream>
 
 //-----------------------------------------------------------------------------
@@ -112,17 +111,12 @@ void HelloTaskClass::Task(void)
     // Counter initialization.
     int i = 0;
 
-    // Get the number of system clock ticks in one second.
-    int oneSecond = CLOCKS_PER_SEC;
-
-    // Output the number of system clock ticks in one second.
-    cout << "CLOCKS_PER_SEC = " << CLOCKS_PER_SEC << endl << endl;
-
     // The task body is always an infinite loop.
 
     for (;;) {
         // Output the string "Hello World!World.cpp" followed by a counter value.
         cout << "Hello World! " << i++ << endl;
+        
         // Sleep for one second.
         Pause(1000);
     }
@@ -134,7 +128,7 @@ void HelloTaskClass::Task(void)
 int main()
 {
      // Create the hello task.
-    HelloTask = new HelloTaskClass();
+     HelloTask = new HelloTaskClass();
 
     // Start tasking.
     Suspend();
