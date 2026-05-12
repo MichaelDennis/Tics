@@ -205,35 +205,26 @@ class MemNodeClass;
 class MemMgrClass;
 
 //-----------------------------------------------------------------------------
-// TicsBaseClass
+// TicsClass
 //
-// Base class. Various classes are derived from the TicsBaseClass.
+// Base class. All Tics classes are derived from this class.
 //-----------------------------------------------------------------------------
-class TicsBaseClass {
+class TicsClass {
 public:
     // Data
+    
+    // Unique id number that assigned to an instance on creation and deletion.
     static int IdCounter;
+    // The actual id. See the constructor and destructor.
     int Id;
 
     // Functions
-    // TicsBaseClass constructor.
-    TicsBaseClass(void)
-    {
-        // Object Id starts at 1. Zero is used to indicated that the Id has not been assigned.
-        Id = ++IdCounter;
-    }
+    
+    TicsClass();
+   virtual ~TicsClass(void);
+    void *operator new(size_t size);
 
-    // TicsBaseClass destructor.
-   virtual ~TicsBaseClass(void)
-    {
-        // Bump the Id to indicate that the object has been deleted.
-        Id++;
-    }
-
-    // Creates a new instance of this class.
-    void* operator new(size_t size);
-
-    // Deletes an instance of this class.
+// Deletes an instance of this class.
     void operator delete(void* p);
 };
 
@@ -245,7 +236,7 @@ public:
 // 
 // The base class from which all list node classes are derived.
 //-----------------------------------------------------------------------------
-class NodeClass : public TicsBaseClass {
+class NodeClass : public TicsClass {
 public:
     // Data
     // Pointer to the next node in the list.
@@ -288,7 +279,7 @@ public:
     }
 };
 
-class FlagsClass : public TicsBaseClass {
+class FlagsClass : public TicsClass {
 public:
     // Data
     int Flags;
@@ -374,7 +365,7 @@ public:
 ///  Contains information needed to cancel a msg.
 //-----------------------------------------------------------------------------
 
-class MsgInfoClass : public TicsBaseClass {
+class MsgInfoClass : public TicsClass {
 
  public:
     // Data
@@ -404,7 +395,7 @@ class MsgInfoClass : public TicsBaseClass {
 //
 // Manages a doubly linked list, ordered by priority.
 //-----------------------------------------------------------------------------
-class ListClass : public TicsBaseClass {
+class ListClass : public TicsClass {
 public:
     enum ListClassEnum {
         // The default number of nodes allowed in the list.
@@ -519,7 +510,7 @@ public:
 //
 // This class manages a task's stack.
 //-----------------------------------------------------------------------------
-class StackClass : public TicsBaseClass {
+class StackClass : public TicsClass {
 public:
     // Data
     enum StackClassEnum {
@@ -566,7 +557,7 @@ public:
 //
 // Manages a circular fifo queue.
 //-----------------------------------------------------------------------------
-class FifoClass : public TicsBaseClass {
+class FifoClass : public TicsClass {
 public:
     // Data
 
@@ -798,7 +789,7 @@ public:
 };
 
 // All errors call the Report() method.
-class ErrorHandlerClass : public TicsBaseClass {
+class ErrorHandlerClass : public TicsClass {
 public:
     // Data
     int ErrorNum;
@@ -827,7 +818,7 @@ public:
 
 // Each node in the memory mgr list, points to a memory pool of fixed size 
 // memory blocks.
-class NodeHeaderClass : public TicsBaseClass {
+class NodeHeaderClass : public TicsClass {
 public:
     // Data
     enum NodeHeaderClassEnum {
@@ -841,23 +832,9 @@ public:
     MemNodeClass* Next;
 
     // Functions
-    void Initialize(int numBytesRequested, MemMgrClass* MemMgrPool)
-    {
-        Next = 0;
-        Signature = SignatureValue;
-        NumBytesRequested = numBytesRequested;
-        MemMgrPool = MemMgrPool;
-    }
-
-    bool SignatureMatches()
-    {
-        return Signature == SignatureValue ? true : false;
-    }
-
-    bool MemMgrMatches(MemMgrClass* MemMgrPool)
-    {
-        return MemMgrPool == MemMgrPool ? true : false;
-    }
+    void Initialize(int numBytesRequested, MemMgrClass* memMgrPool);
+    bool SignatureMatches();
+    bool MemMgrMatches(MemMgrClass* memMgrPool);
 };
 
 class MemNodeClass : public NodeHeaderClass {
@@ -866,8 +843,8 @@ public:
     unsigned int StartOfUserArea;
 
     // Functions
-    MemNodeClass(int numBytesRequested, MemMgrClass* MemMgrSource) : StartOfUserArea(0) {
-        Initialize(numBytesRequested, MemMgrSource);
+    MemNodeClass(int numBytesRequested, MemMgrClass* memMgrSource) : StartOfUserArea(0) {
+        Initialize(numBytesRequested, memMgrSource);
     }
 
     void* UserArea()
@@ -881,7 +858,7 @@ public:
     }
 };
 
-class MemNodeListClass : public TicsBaseClass {
+class MemNodeListClass : public TicsClass {
 private:
     // Data
     MemNodeClass* Head;
@@ -910,7 +887,7 @@ public:
 // The MemMgrClass manages a linked list of MemNodeClass objects, each of which
 // contains a list of 
 //-----------------------------------------------------------------------------
-class MemMgrClass : public TicsBaseClass {
+class MemMgrClass : public TicsClass {
 private:
     // Data
     char* MemoryStart;
@@ -933,24 +910,6 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// InterruptTableRowClass
-//-----------------------------------------------------------------------------
-class InterruptTableRowClass : public TicsBaseClass {
-public:
-
-    // Data
-    FifoClass Fifo;
-
-
-    // Functions
-    InterruptTableRowClass(int fifoItemSizeInBytes, int numFifoItems = NumInterruptFifoSlots, void* fifoSpace = 0) : 
-        Fifo(fifoItemSizeInBytes, numFifoItems, fifoSpace) {}
-    bool DataAvailable(void) { return !Fifo.IsNotEmpty(); }
-    // You must define this function to handle the fifo data.
-    virtual void Handler() {}
-};
-
-//-----------------------------------------------------------------------------
 // TicsNameSpace External Definitions
 //-----------------------------------------------------------------------------
 
@@ -969,7 +928,6 @@ namespace TicsNameSpace {
     extern DelayListClass DelayList;
     extern FlagsClass TicsFlags;
 };
-
 
 //-----------------------------------------------------------------------------
 // End guard

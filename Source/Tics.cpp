@@ -53,7 +53,7 @@ using namespace std;
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
 // Initialize the Tics object instance counter.
-int TicsBaseClass::IdCounter = 0;
+int TicsClass::IdCounter = 0;
 
 
 //-----------------------------------------------------------------------------
@@ -2513,13 +2513,13 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
     }
 
  //-----------------------------------------------------------------------------
-/// \brief Allocate space for a TicsBaseClass object.
+/// \brief Allocate space for a TicsClass object.
 ///
 /// \param size - The number of bytes to allocate.
 ///
 /// \return A pointer to the allocated memory.
 //-----------------------------------------------------------------------------
-void * TicsBaseClass::operator new(size_t size)
+void * TicsClass::operator new(size_t size)
 {
     // Allocate a block of memory for the task object.
     void * p = MemMgr.Allocate((int) size);
@@ -2528,13 +2528,69 @@ void * TicsBaseClass::operator new(size_t size)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Free up space for a TicsBaseClass object.
+/// \brief Free up space for a TicsClass object.
 ///
 /// \param p - A pointer to the allocated space.
 //-----------------------------------------------------------------------------
-void TicsBaseClass::operator delete(void * p)
+void TicsClass::operator delete(void * p)
 {
     // Deallocate the task memory block.
     MemMgr.DeAllocate(p);
+}
+
+//-----------------------------------------------------------------------------
+/// \brief TicsClass constructor.
+///
+/// \param p - A pointer to the allocated space.
+//-----------------------------------------------------------------------------
+TicsClass::TicsClass()
+{
+        // Object Id starts at 1. Zero is used to indicated that the Id has not been assigned.
+        Id = ++IdCounter;
+}
+
+    // TicsClass destructor.
+TicsClass::~TicsClass()
+{
+    // Bump the Id to indicate that the object has been deleted.
+    Id++;
+}
+
+//-------------------------Moved functions---------------------------
+
+//-----------------------------------------------------------------------------
+/// \brief Initialize the node header with the requested size and memory pool.
+///
+/// \param numBytesRequested Number of bytes requested by the user.
+/// \param memMgrPool        Pointer to the memory‑manager pool.
+//-----------------------------------------------------------------------------
+void NodeHeaderClass::Initialize(int numBytesRequested, MemMgrClass *memMgrPool)
+{
+    Next = 0;
+    Signature = SignatureValue;
+    NumBytesRequested = numBytesRequested;
+    MemMgrPool = memMgrPool;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Check whether the stored MemMgrPool matches the given pointer.
+///
+/// \param memMgrPool The memory‑manager pointer to compare.
+///
+/// \return true if the pointers match; otherwise false.
+//-----------------------------------------------------------------------------
+bool NodeHeaderClass::MemMgrMatches(MemMgrClass *memMgrPool)
+{
+    return MemMgrPool == memMgrPool ? true : false;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Check whether the stored Signature matches the expected value.
+///
+/// \return true if the signature matches; otherwise false.
+//-----------------------------------------------------------------------------
+bool NodeHeaderClass::SignatureMatches()
+{
+    return Signature == SignatureValue ? true : false;
 }
 
