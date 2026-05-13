@@ -188,6 +188,7 @@ namespace TicsNameSpace {
         ErrorAttemptToDeleteANonExistentNode = 1066,
         ErrorNullMsgPtrInCancel = 1067,
         ErrorBadTimerTickCount = 1068,
+        ErrorAttemptToDestroyAnUnlinkedNode = 1069,
     };
 };
 
@@ -205,23 +206,23 @@ class MemNodeClass;
 class MemMgrClass;
 
 //-----------------------------------------------------------------------------
-// TicsClass
+// TicsBaseClass
 //
 // Base class. All Tics classes are derived from this class.
 //-----------------------------------------------------------------------------
-class TicsClass {
+class TicsBaseClass {
 public:
     // Data
     
     // Unique id number that assigned to an instance on creation and deletion.
-    static int IdCounter;
+    int IdCounter = 0;
     // The actual id. See the constructor and destructor.
     int Id;
 
     // Functions
     
-    TicsClass();
-   virtual ~TicsClass(void);
+    TicsBaseClass();
+   virtual ~TicsBaseClass(void);
     void *operator new(size_t size);
 
 // Deletes an instance of this class.
@@ -236,7 +237,7 @@ public:
 // 
 // The base class from which all list node classes are derived.
 //-----------------------------------------------------------------------------
-class NodeClass : public TicsClass {
+class NodeClass : public TicsBaseClass {
 public:
     // Data
     // Pointer to the next node in the list.
@@ -255,7 +256,7 @@ public:
         Next(0), Prev(0), Data(data), ListId(0), Priority(priority)
     {
     }
-
+    
     bool ListIdIsValid(int listId)
     {
         // Returns true if this node is (1) in the list whose list id is
@@ -279,7 +280,7 @@ public:
     }
 };
 
-class FlagsClass : public TicsClass {
+class FlagsClass : public TicsBaseClass {
 public:
     // Data
     int Flags;
@@ -365,7 +366,7 @@ public:
 ///  Contains information needed to cancel a msg.
 //-----------------------------------------------------------------------------
 
-class MsgInfoClass : public TicsClass {
+class MsgInfoClass : public TicsBaseClass {
 
  public:
     // Data
@@ -395,7 +396,7 @@ class MsgInfoClass : public TicsClass {
 //
 // Manages a doubly linked list, ordered by priority.
 //-----------------------------------------------------------------------------
-class ListClass : public TicsClass {
+class ListClass : public TicsBaseClass {
 public:
     enum ListClassEnum {
         // The default number of nodes allowed in the list.
@@ -510,7 +511,7 @@ public:
 //
 // This class manages a task's stack.
 //-----------------------------------------------------------------------------
-class StackClass : public TicsClass {
+class StackClass : public TicsBaseClass {
 public:
     // Data
     enum StackClassEnum {
@@ -557,7 +558,7 @@ public:
 //
 // Manages a circular fifo queue.
 //-----------------------------------------------------------------------------
-class FifoClass : public TicsClass {
+class FifoClass : public TicsBaseClass {
 public:
     // Data
 
@@ -789,7 +790,7 @@ public:
 };
 
 // All errors call the Report() method.
-class ErrorHandlerClass : public TicsClass {
+class ErrorHandlerClass : public TicsBaseClass {
 public:
     // Data
     int ErrorNum;
@@ -818,7 +819,7 @@ public:
 
 // Each node in the memory mgr list, points to a memory pool of fixed size 
 // memory blocks.
-class NodeHeaderClass : public TicsClass {
+class NodeHeaderClass : public TicsBaseClass {
 public:
     // Data
     enum NodeHeaderClassEnum {
@@ -858,7 +859,7 @@ public:
     }
 };
 
-class MemNodeListClass : public TicsClass {
+class MemNodeListClass : public TicsBaseClass {
 private:
     // Data
     MemNodeClass* Head;
@@ -887,7 +888,7 @@ public:
 // The MemMgrClass manages a linked list of MemNodeClass objects, each of which
 // contains a list of 
 //-----------------------------------------------------------------------------
-class MemMgrClass : public TicsClass {
+class MemMgrClass : public TicsBaseClass {
 private:
     // Data
     char* MemoryStart;

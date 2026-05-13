@@ -52,8 +52,6 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
-// Initialize the Tics object instance counter.
-int TicsClass::IdCounter = 0;
 
 
 //-----------------------------------------------------------------------------
@@ -74,7 +72,7 @@ namespace TicsNameSpace {
     // as being similar to malloc(), with member functions to allocate and
     // deallocate memory. A chunk of memory needs to be provided to the
     // MemMgrClass constructor, from which blocks of memory are carved
-    // out when needed. 
+    // out when needed.
     MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
     // MemMgrClass *MemMgr;
     // MemMgr = new MemMgrClass(MemMgrSpace, SizeMemMgr);
@@ -682,7 +680,7 @@ void DelayListClass::CheckForTimeouts()
         nextMsg = (MsgClass*)nextNode;
 
         // Get the signed difference between the current tick count and 
-        // timeout tick count for this msg.
+        // timeout tick count for this msg. This handles timer wrap.
         dtCurrent = (int32_t)(currentTime - msg->EndTime);
 
         // If we're past the delayed msg end time, then dispatch it.
@@ -1839,7 +1837,6 @@ void IdleTaskClass::Task()
             Suspend();
         }
         else {
-
             // There is no work to do, since the Ready List is empty.
             //
             // If you want to save power, this is where you would put your "sleep" 
@@ -2495,8 +2492,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
 //-----------------------------------------------------------------------------
 /// \brief Check for a valid msg delay.
 ///
-/// Note that a value of 0 is allowed, but it will return immediately.
-///
+/// Note that a value of 0 is allowed, but it will timeout on the first timer check.
 /// \param a - The msg to add.
 /// \param b - the msg to add after.
 ///
@@ -2513,13 +2509,13 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
     }
 
  //-----------------------------------------------------------------------------
-/// \brief Allocate space for a TicsClass object.
+/// \brief Allocate space for a TicsBaseClass object.
 ///
 /// \param size - The number of bytes to allocate.
 ///
 /// \return A pointer to the allocated memory.
 //-----------------------------------------------------------------------------
-void * TicsClass::operator new(size_t size)
+void * TicsBaseClass::operator new(size_t size)
 {
     // Allocate a block of memory for the task object.
     void * p = MemMgr.Allocate((int) size);
@@ -2528,29 +2524,30 @@ void * TicsClass::operator new(size_t size)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Free up space for a TicsClass object.
+/// \brief Free up space for a TicsBaseClass object.
 ///
 /// \param p - A pointer to the allocated space.
 //-----------------------------------------------------------------------------
-void TicsClass::operator delete(void * p)
+void TicsBaseClass::operator delete(void * p)
 {
     // Deallocate the task memory block.
     MemMgr.DeAllocate(p);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief TicsClass constructor.
+/// \brief TicsBaseClass constructor.
 ///
 /// \param p - A pointer to the allocated space.
 //-----------------------------------------------------------------------------
-TicsClass::TicsClass()
+TicsBaseClass::TicsBaseClass()
 {
-        // Object Id starts at 1. Zero is used to indicated that the Id has not been assigned.
+        // Object Id starts at 1. Zero is used to indicated that the Id has 
+        // not been assigned.
         Id = ++IdCounter;
 }
 
-    // TicsClass destructor.
-TicsClass::~TicsClass()
+    // TicsBaseClass destructor.
+TicsBaseClass::~TicsBaseClass()
 {
     // Bump the Id to indicate that the object has been deleted.
     Id++;
