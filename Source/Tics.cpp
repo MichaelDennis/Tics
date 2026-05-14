@@ -52,7 +52,10 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
-
+    // The Tics user increments this counter once per ms.
+    // If TicsFlags.SimualtioMode is true, then this timer is incremented
+    // every ms by calling ReadSimulatedTimerCount().
+    TimerTickType TicsMsTimer;
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -111,19 +114,13 @@ namespace TicsNameSpace {
     // All errors are handled by calling ErrorHandler.Report().
     ErrorHandlerClass ErrorHandler;
 
-    // The Tics user increments this counter once per ms.
-    // If TicsFlags.SimualtioMode is true, then this timer is incremented
-    // every ms by calling ReadFakeTimerCount().
-    TimerTickType TicsMsTimer;
-
     // TicsNameSpace functions.
 
-    TimerTickType ReadFakeTickCount();
+    TimerTickType ReadSimulatedTickCount();
     TimerTickType ReadRealTickCount();
-    TimerTickType ReadMsTickCount();
+    TimerTickType ReadTickCount();
     void CheckForSystemEvents();
     void CheckForInterrupts();
-    void CheckForInterrupts2();
     void Schedule(TaskClass* task, bool inIsr = false);
     void Send(TaskClass * task, FifoClass * fifo, void * data);
     void MemSet(void* dst, int numChars, char data);
@@ -937,6 +934,36 @@ void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Sends a msg from within an isr to a task.
+///
+/// The normal TaskClass::Send() function cannot be used from within an isr
+/// because the linked list links can get corrupted. Instead, a FifoClass
+/// object is used. The isr adds data items to the fifo and the task retrieves
+/// the objects from the fifo. The isr must use this function to send data
+/// to a task, if that is required. The preferred method is for the isr to handle
+/// all necessary work, but if work must be deferred to a task, then this function
+/// must be used, or the isr can simply do what this function does, i.e., add data to a
+/// fifo, then schedule the task to run. When the task runs, it retrieves the data
+/// from the fifo, either directly or by using function
+/// TaskClass::Wait(FifoClass * fifo, void * data).
+///
+/// \param task - The task to send the data to.
+/// \param fifo - The task's fifo. The fifo can only be used by one isr.
+/// \param data - The data (msg) to be copied into the fifo slot.
+///
+/// Note: There is no need for a data count, because the fifo knows
+/// its slot size.
+//-----------------------------------------------------------------------------
+void TicsClass::Send(TaskClass * task, FifoClass * fifo, void * data)
+{
+    // Add the data block into the task's fifo.
+    fifo->Add(data);
+
+    // Add the task to the Interrupt fifo.
+    Schedule(task, true);
+}
+
+//-----------------------------------------------------------------------------
 /// \brief Waits for a fifo msg from an isr.
 ///
 /// See the description given above for TicsNameSpace::Send().
@@ -1008,7 +1035,7 @@ TimerTickType TicsNameSpace::ReadTickCount()
 {
     // If we are in simulation mode, read the OS clock.
     if (TicsFlags.IsSet(SimulationMode)) {
-        return ReadFakeTickCount();
+        return ReadSimulatedTickCount();
     }
     else {
         return ReadRealTickCount();
@@ -1016,11 +1043,53 @@ TimerTickType TicsNameSpace::ReadTickCount()
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Read and return the tick count from the system clock.
+///
+/// \return The current system tick count reading.
+//-----------------------------------------------------------------------------
+TimerTickType TicsClass::ReadTickCount()
+{
+    // If we are in simulation mode, read the OS clock.
+    if (TicsFlags->IsSet(SimulationMode)) {
+        return ReadSimulatedTickCount();
+    }
+    else {
+        return ReadRealTickCount();
+    }
+}
+
+
+//-----------------------------------------------------------------------------
 /// \brief Read and return the 1 ms count from the Linux OS system clock.
 ///
 /// \return The current system tick count reading.
 //-----------------------------------------------------------------------------
-TimerTickType TicsNameSpace::ReadFakeTickCount()
+TimerTickType TicsNameSpace::ReadSimulatedTickCount()
+{
+    TimerTickType tickCount;
+
+    struct timespec ts;
+
+    // Get the current clock time info.
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+
+    // Convert to milliseconds.
+    uint64_t ms = (uint64_t)ts.tv_sec * 1000ULL +
+                  (uint64_t)ts.tv_nsec / 1000000ULL;
+
+    // Return lower 32 bits (wraps naturally every ~49.7 days)
+    tickCount = (TimerTickType) ms;
+
+    // Return the 32-bit clock tick count.
+    return tickCount;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Read and return the 1 ms count from the Linux OS system clock.
+///
+/// \return The current system tick count reading.
+//-----------------------------------------------------------------------------
+TimerTickType TicsClass::ReadSimulatedTickCount()
 {
     TimerTickType tickCount;
 
@@ -1050,6 +1119,18 @@ TimerTickType TicsNameSpace::ReadRealTickCount()
     // TicsMsTimer is a Tics global that is incremented by the user every 1 ms.
     return TicsMsTimer;
 }
+
+//-----------------------------------------------------------------------------
+/// \brief Read and return the tick count from the hardware clock.
+///
+/// \return The current hardware clock count reading.
+//-----------------------------------------------------------------------------
+TimerTickType TicsClass::ReadRealTickCount()
+{
+    // TicsMsTimer is a Tics global that is incremented by the user every 1 ms.
+    return TicsMsTimer;
+}
+
 
 
 //-----------------------------------------------------------------------------
@@ -1091,6 +1172,44 @@ void TicsNameSpace::Schedule(TaskClass* task, bool inIsr)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Add the indicated task to the Ready List.
+///
+/// The Schedule function is for Tics internal use only. At the user level,
+/// the only approved way to schedule a task is to send a msg to it.
+///
+/// If inIsr is true, the task is added to the Interrupt Fifo, and will be 
+/// transferred to the Ready List on the next task switch, otherwise, if inIsr
+/// is false, the task is added to the Ready List.
+///
+/// Note: Isr's must not re-enable interrupts - ALL interrupts must remain disabled
+/// for the duration of the isr.
+///
+/// \param task - The task to schedule.
+///
+/// \param inIsr - Set to true if this function is being called from an isr.
+//-----------------------------------------------------------------------------
+void TicsClass::Schedule(TaskClass* task, bool inIsr)
+{
+    // Make sure we have a non-null pointer.
+    if (task == 0) {
+        ErrorHandler->Report(ErrorNullTaskPointerInSchedule);
+    }
+
+    // If we're in an interrupt service routine...
+    if (inIsr) {
+        // Schedule the task by adding it to the Interrupt Fifo, rather
+        // than the Ready List, to avoid list corruption.
+        // All interrupts must remain disabled while within the isr, 
+        // otherwise the Interrupt Fifo can be corrupted.
+        InterruptFifo->Add(&task);
+    }
+    else {
+        // Add the task to the Ready List.
+        ReadyList->AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
+    }
+}
+
+//-----------------------------------------------------------------------------
 /// \brief If there are any tasks in the Interrupt Fifo, move them to the 
 /// Ready List.
 ///
@@ -1120,6 +1239,36 @@ void TicsNameSpace::CheckForInterrupts()
 }
 
 //-----------------------------------------------------------------------------
+/// \brief If there are any tasks in the Interrupt Fifo, move them to the 
+/// Ready List.
+///
+/// Tasks can't be scheduled directly (by adding to the Ready List) from within 
+/// an isr (otherwise, list corruption could occur). Instead, tasks are scheduled
+/// by adding them to the Interrupt Fifo, and then later moved to the
+/// Ready List. This function is called at each task switch.
+//-----------------------------------------------------------------------------
+void TicsClass::CheckForInterrupts()
+{
+    TaskClass* task;
+
+    // If the Interrupt Fifo is not empty, then remove the task from it, and schedule it.
+    while (InterruptFifo->IsNotEmpty()) {
+
+        // Get the task from the Interrupt Fifo.
+        InterruptFifo->Remove(&task);
+
+
+        // Check for an invalid task.
+        if (task == 0) {
+            ErrorHandler->Report(ErrorNullTaskPtrInCheckForInterrupts);
+        }
+
+        // Schedule the task.
+        Schedule(task);
+    }
+}
+
+//-----------------------------------------------------------------------------
 /// \brief Check for interrupt msgs and msg timeouts. For Tics system use only.
 //-----------------------------------------------------------------------------
 void TicsNameSpace::CheckForSystemEvents()
@@ -1129,6 +1278,18 @@ void TicsNameSpace::CheckForSystemEvents()
 
     // Check for expired timers.
     DelayList.CheckForTimeouts();
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Check for interrupt msgs and msg timeouts. For Tics system use only.
+//-----------------------------------------------------------------------------
+void TicsClass::CheckForSystemEvents()
+{
+    // Check for msgs in the Interrupt Fifo.
+    CheckForInterrupts();
+
+    // Check for expired timers.
+    DelayList->CheckForTimeouts();
 }
 
 //-----------------------------------------------------------------------------
@@ -1144,7 +1305,18 @@ void TicsNameSpace::Suspend()
     TicsSystemTask.Suspend();
 }
 
-
+//-----------------------------------------------------------------------------
+/// \brief Start tasks running.
+///
+/// Call this function from main() to start Tics running.
+/// Typically you would have created tasks in main() prior
+/// to invoking this function.
+//-----------------------------------------------------------------------------
+void TicsClass::Suspend()
+{
+    // Suspend the current task, and run the next task in the Ready List.
+    TicsSystemTask->Suspend();
+}
 
 //-----------------------------------------------------------------------------
 /// \brief TaskClass constructor. See Tics.hpp for parameter default values.
@@ -1890,6 +2062,23 @@ void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Copy a block of memory.
+///
+/// \param dst - Where to copy to.
+/// \param src - Where to copy from.
+/// \param numChars - The number of bytes to copy.
+//-----------------------------------------------------------------------------
+void TicsClass::MemCopy(void* dst, void* src, int numChars)
+{
+    char* d = (char*) dst;
+    char* s = (char*) src;
+
+    for (int i = 0; i < numChars; i++) {
+        *d++ = *s++;
+    }
+}
+
+//-----------------------------------------------------------------------------
 /// \brief Copy a byte to a block of memory.
 ///
 /// \param dst - Where to copy to.
@@ -1897,6 +2086,23 @@ void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
 /// \param data - The byte to copy.
 //-----------------------------------------------------------------------------
 void TicsNameSpace::MemSet(void* dst, int numChars, char data)
+{
+    int i;
+    char* d = (char*) dst;
+
+    for (i = 0; i < numChars; i++) {
+        *d++ = data;
+    }
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Copy a byte to a block of memory.
+///
+/// \param dst - Where to copy to.
+/// \param numChars - The number of bytes to copy.
+/// \param data - The byte to copy.
+//-----------------------------------------------------------------------------
+void TicsClass::MemSet(void* dst, int numChars, char data)
 {
     int i;
     char* d = (char*) dst;
@@ -2499,6 +2705,25 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
 /// \return true if the delay is within bounds, false otherwise.
 //-----------------------------------------------------------------------------
     bool TicsNameSpace::DelayIsCorrect(TimerTickType delay)
+    {
+        if (delay < 0 || delay > MaxTimerSize) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+//-----------------------------------------------------------------------------
+/// \brief Check for a valid msg delay.
+///
+/// Note that a value of 0 is allowed, but it will timeout on the first timer check.
+/// \param a - The msg to add.
+/// \param b - the msg to add after.
+///
+/// \return true if the delay is within bounds, false otherwise.
+//-----------------------------------------------------------------------------
+    bool TicsClass::DelayIsCorrect(TimerTickType delay)
     {
         if (delay < 0 || delay > MaxTimerSize) {
             return false;
