@@ -964,7 +964,7 @@ void TicsClass::Send(TaskClass * task, FifoClass * fifo, void * data)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Waits for a fifo msg from an isr.
+/// \brief Waits for a fifo msg.
 ///
 /// See the description given above for TicsNameSpace::Send().
 //-----------------------------------------------------------------------------
@@ -1341,12 +1341,14 @@ void TicsClass::Suspend()
 //-----------------------------------------------------------------------------
 TaskClass::TaskClass(
     const char* name,
+    int tag,
     int priority,
     int flags,
     int stackSizeInBytes) :
     Flags(flags),
     Stack(stackSizeInBytes),
     Name(name),
+    Tag(tag),
     Priority(priority), 
     NodeClass()
 {
@@ -2816,3 +2818,20 @@ bool NodeHeaderClass::SignatureMatches()
     return Signature == SignatureValue ? true : false;
 }
 
+//-----------------------------------------------------------------------------
+/// \brief The base clss for all major Tics classes.
+//-----------------------------------------------------------------------------
+TicsClass::TicsClass() 
+{
+    MemMgr = new MemMgrClass(MemMgrSpace, SizeMemMgr);
+    TicsFlags = new FlagsClass(SafeModeFlag | SimulationMode);
+    ReadyList = new MsgListClass();
+    TaskList = new TaskListClass();
+    DelayList = new DelayListClass();
+    DeleteList = new MsgListClass();
+    TicsSystemTask = new TicsSystemTaskClass();
+    IdleTask = new IdleTaskClass();
+    InterruptFifo = new FifoClass(sizeof(TaskClass*), NumInterruptFifoSlots);
+    ErrorHandler = new ErrorHandlerClass();
+    CurrentTask = 0;
+};

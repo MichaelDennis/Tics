@@ -627,6 +627,8 @@ public:
     StackClass Stack;
     // Optional task name. Used in debugging.
     const char* Name;
+    // Tag number used to id a task when sending a msg between processors.
+    int Tag;
     // When a msg is added to the Ready List where this task is the receiver, 
     // the msg priority is set to this->Priority.
     int Priority;
@@ -640,6 +642,8 @@ public:
     TaskClass(
         // Optional task name.
         const char* name = 0,
+        // Tag number. Used for interprocessor communications.
+        int tag = 0,
         // The priority used when a task is scheduled.
         int priority = MediumPriority,
         // The task will be scheduled by Tics when it is created.
@@ -938,11 +942,11 @@ namespace TicsNameSpace {
 
 class TicsClass : public TicsBaseClass {
     // Data
-    private:
+    public:
     // Msgs are created by allocating a memory block from this area.
     // An instance of MemMgrClass class is created to manage this space.
     // (See the definition of MemMgr below).
-    int MemMgrSpace[SizeMemMgr / sizeof(int)];
+    //static int MemMgrSpace[SizeMemMgr / sizeof(int)];
 
     MemMgrClass *MemMgr;
 
@@ -983,20 +987,7 @@ class TicsClass : public TicsBaseClass {
     public:
 
     // Functions
-    TicsClass() {
-        MemMgr = new MemMgrClass(MemMgrSpace, SizeMemMgr);
-        TicsFlags = new FlagsClass(SafeModeFlag | SimulationMode);
-        ReadyList = new MsgListClass();
-        TaskList = new TaskListClass();
-        DelayList = new DelayListClass();
-        DeleteList = new MsgListClass();
-        TicsSystemTask = new TicsSystemTaskClass();
-        IdleTask = new IdleTaskClass();
-        InterruptFifo = new FifoClass(sizeof(TaskClass*), NumInterruptFifoSlots);
-        ErrorHandler = new ErrorHandlerClass();
-        CurrentTask = 0;
-    };
- 
+    TicsClass();
     TimerTickType ReadSimulatedTickCount();
     TimerTickType ReadRealTickCount();
     TimerTickType ReadTickCount();

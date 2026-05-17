@@ -127,8 +127,10 @@ void HelloTaskClass::Task(void)
 //-----------------------------------------------------------------------------
 int main()
 {
-     // Create the hello task.
-     HelloTask = new HelloTaskClass();
+    TicsClass * Tics = new TicsClass();
+    
+    // Create the hello task.
+    HelloTask = new HelloTaskClass();
 
     // Start tasking.
     Suspend();
