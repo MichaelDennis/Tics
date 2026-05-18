@@ -66,7 +66,9 @@ namespace TicsNameSpace {
 //-----------------------------------------------------------------------------
 // Namespaces enums
 //-----------------------------------------------------------------------------
-    enum TicsNamespaceEnum {
+enum class Bool32 : uint32_t;
+
+enum TicsNamespaceEnum {
         // The maximum allowed size of a timer.
         MaxTimerSize = (0x80000000 - 1),
         // The number of system clock ticks per millisecond.
@@ -933,76 +935,6 @@ namespace TicsNameSpace {
     extern DelayListClass DelayList;
     extern FlagsClass TicsFlags;
 };
-
-//-----------------------------------------------------------------------------
-/// \class TicsClass
-///
-/// \brief The base class which contains all Tics objects.
-//-----------------------------------------------------------------------------
-
-class TicsClass : public TicsBaseClass {
-    // Data
-    public:
-    // Msgs are created by allocating a memory block from this area.
-    // An instance of MemMgrClass class is created to manage this space.
-    // (See the definition of MemMgr below).
-    //static int MemMgrSpace[SizeMemMgr / sizeof(int)];
-
-    MemMgrClass *MemMgr;
-
-    // Various flags used by Tics.
-    FlagsClass *TicsFlags; 
-
-    // List of tasks waiting to run.
-    MsgListClass *ReadyList;
-
-    // List of tasks that currently exist in the system.
-    TaskListClass *TaskList;
-
-    // List of msgs that will be sent out after so many clock ticks.
-    // A task is put to sleep (see Pause() or StartTimer()) by the task 
-    // sending itself a delayed msg, then waiting for the msg, which
-    // suspends the task until a msg is sent to it.
-    DelayListClass *DelayList;
-
-    // List of msgs that are marked for deletion. Msgs are valid while in the task that
-    // was waiting for the msg. Once the task relinquishes control, Tics deletes the msg.
-    MsgListClass *DeleteList;
-
-    // A task that Tics maintains for its own use.
-    TicsSystemTaskClass *TicsSystemTask;
-
-    // Pointer to the task that is currently running.
-    TaskClass *CurrentTask;
-
-    // This task runs when no other tasks are ready to run (it's priority is lower than any user or system task).
-    IdleTaskClass *IdleTask;
-    
-    // Isr's schedule tasks to run by adding them to this fifo. 
-    FifoClass *InterruptFifo;
-
-    // All errors are handled by calling ErrorHandler.Report().
-    ErrorHandlerClass *ErrorHandler;
-
-    public:
-
-    // Functions
-    TicsClass();
-    TimerTickType ReadSimulatedTickCount();
-    TimerTickType ReadRealTickCount();
-    TimerTickType ReadTickCount();
-    void CheckForSystemEvents();
-    void CheckForInterrupts();
-    void Schedule(TaskClass* task, bool inIsr = false);
-    void Send(TaskClass * task, FifoClass * fifo, void * data);
-    void MemSet(void* dst, int numChars, char data);
-    void MemCopy(void* dst, void* src, int numChars);
-    void Suspend();
-    bool DelayIsCorrect(TimerTickType delay);
-    
-};
-
-
 
 //-----------------------------------------------------------------------------
 // End guard
