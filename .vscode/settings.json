@@ -1,5 +1,4 @@
 {
-    "editor.formatOnSave": false,
-    "editor.renderWhitespace": "all",
-    "terminal.integrated.scrollOnOutput": "always"
+    "editor.stickyScroll.enabled": false,
+    "workbench.editor.stickyScroll.enabled": false
 }
