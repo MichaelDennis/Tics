@@ -146,7 +146,6 @@ using namespace TicsNameSpace;
 /// \param stackPadSizeInBytes - The pad is an area at the bottom of stack memory. 
 /// Any writes to this area will generate an error.
 //-----------------------------------------------------------------------------
-
 StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
 {
     // SavedSp is used to save the SP of the task being switched out.
@@ -231,7 +230,7 @@ void StackClass::Check(void)
 //--------------------TaskClass Member Functions-------------------
 
 //-----------------------------------------------------------------------------
-/// \brief Adds a taskNodeClass instance to the TaskList.
+/// \brief Adds a TaskClass instance to the TaskList.
 //-----------------------------------------------------------------------------
 void TaskListClass::Add(TaskClass* task)
 {
@@ -240,11 +239,7 @@ void TaskListClass::Add(TaskClass* task)
 
 //-----------------------------------------------------------------------------
 /// \brief Perform various things that need to be done prior to performing
-/// a context switch by calling SwitchTasks().
-/// 
-/// Note: The very first time that a task is invoked, it can't be "resumed".
-/// This condition is handled in function SwitchTasks(), which is called at
-///  the end of this function.
+/// a context switch.
 //-----------------------------------------------------------------------------
 void TaskClass::Suspend(void)
 {
@@ -263,7 +258,7 @@ void TaskClass::Suspend(void)
     if (ReadyList.IsNotEmpty()) {
 
         // Get the next Ready List msg.
-        msg = (MsgClass*)ReadyList.Remove();
+        msg = (MsgClass*) ReadyList.Remove();
 
         // Get the next task to run.
         newTask = msg->Receiver;
@@ -605,7 +600,8 @@ void ListClass::Add(NodeClass* a)
 //-----------------------------------------------------------------------------
 void DelayListClass::AddByDelay(MsgClass* a)
 {
-    MsgClass* b = (MsgClass*)Head->Next;
+    // We neeed to assign b because the for loop may be skipped if the list is empty.
+    MsgClass* b = (MsgClass*) Head->Next;
     NodeClass* node;
 
     for (node = Head->Next; node != Tail; node = node->Next) {
@@ -633,7 +629,7 @@ void DelayListClass::AddByDelay(MsgClass* a)
 /// the msg EndTime field. The EndTime field is in units of system ticks (see
 /// the function ReadTickCount()). Delayed msgs are held in the Delay List.
 /// This function scans the Delay List, and sends out any msgs whose EndTime
-/// is past the current time.
+/// is at or past the current time.
 //-----------------------------------------------------------------------------
 void DelayListClass::CheckForTimeouts()
 {
@@ -668,16 +664,16 @@ void DelayListClass::CheckForTimeouts()
         nextNode = node->Next;
 
         // Get the msg.
-        msg = (MsgClass*)node;
+        msg = (MsgClass*) node;
 
         // Get the next msg.
-        nextMsg = (MsgClass*)nextNode;
+        nextMsg = (MsgClass*) nextNode;
 
         // Get the signed difference between the current tick count and 
         // timeout tick count for this msg. This handles timer wrap.
-        dtCurrent = (int32_t)(currentTime - msg->EndTime);
+        dtCurrent = (int32_t) (currentTime - msg->EndTime);
 
-        // If we're past the delayed msg end time, then dispatch it.
+        // If we're at or past the delayed msg end time, then dispatch it.
         if (dtCurrent >= 0) {
             // Remove the delayed msg from the delay list.
             Remove(msg);
@@ -909,17 +905,17 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// the objects from the fifo. The isr must use this function to send data
 /// to a task, if that is required. The preferred method is for the isr to handle
 /// all necessary work, but if work must be deferred to a task, then this function
-/// must be used, or the isr can simply do what this function does, i.e., add data to a
-/// fifo, then schedule the task to run. When the task runs, it retrieves the data
-/// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass * fifo, void * data).
+/// must be used.When the task runs, it retrieves the data from the fifo
+/// by using function TaskClass::Wait(FifoClass * fifo, void * data).
 ///
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo. The fifo can only be used by one isr.
 /// \param data - The data (msg) to be copied into the fifo slot.
+/// \param schedule - An optional boolean. If true, the task will be
 ///
-/// Note: There is no need for a data count, because the fifo knows
-/// its slot size.
+/// Note: There is no need for a data count, because the task can 
+/// make repeated fifo read calls until the fio read function indicates
+/// that the fifo is empty.
 //-----------------------------------------------------------------------------
 void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
 {
@@ -1136,6 +1132,11 @@ void TicsNameSpace::CheckForInterrupts()
         if (task == 0) {
             ErrorHandler.Report(ErrorNullTaskPtrInCheckForInterrupts);
         }
+
+        // Check to make sure the task exists.
+        if (TaskList.TaskExists(task) == false) {
+            ErrorHandler.Report(ErrorMsgAttemptToScheduleANonexistentTask);
+        }   
 
         // Schedule the task.
         Schedule(task);
@@ -1672,85 +1673,6 @@ void MsgClass::CheckParameters(bool fullCheck)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Allocate space for a TaskClass object.
-///
-/// \param size - The number of bytes to allocate.
-///
-/// \return A pointer to the allocated memory.
-//-----------------------------------------------------------------------------
-void * TaskClass::operator new(size_t size)
-{
-    // Allocate a block of memory for the task object.
-    void * p = MemMgr.Allocate((int) size);
-
-    return p;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Free up space for a TaskClass object.
-///
-/// \param p - A pointer to the allocated space.
-//-----------------------------------------------------------------------------
-void TaskClass::operator delete(void * p)
-{
-    // Deallocate the task memory block.
-    MemMgr.DeAllocate(p);
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Allocate space for a MsgClass object.
-///
-/// \param size - The number of bytes to allocate.
-///
-/// \return A pointer to the allocated memory.
-//-----------------------------------------------------------------------------
-void * MsgClass::operator new(size_t size)
-{
-    // Allocate a block of memory for the msg object.
-    void * p = MemMgr.Allocate((int) size);
-
-    return p;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Free up space for a MsgClass object.
-///
-/// \param p - A pointer to the allocated space.
-//-----------------------------------------------------------------------------
-void MsgClass::operator delete(void * p)
-{
-    // Deallocate the msg memory block.
-    MemMgr.DeAllocate(p);
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Allocate space for a FifoClass object.
-///
-/// \param size - The number of bytes to allocate.
-///
-/// \return A pointer to the allocated memory.
-//-----------------------------------------------------------------------------
-void * FifoClass::operator new(size_t size)
-{
-    // Allocate space for the FifoClass object.
-    void * p = MemMgr.Allocate((int) size);
-
-    return p;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Free up space for a FifoClass object.
-///
-/// \param p - A pointer to the allocated space.
-//-----------------------------------------------------------------------------
-void FifoClass::operator delete(void * p)
-{
-    // Deallocate the FifoClass memory block.
-    MemMgr.DeAllocate(p);
-}
-
-
-//-----------------------------------------------------------------------------
 /// \brief Send a pointer to a msg to a task.
 ///
 /// \param receiver - A pointer to the task that is to receive the msg.
@@ -1903,9 +1825,27 @@ void TicsSystemTaskClass::Task()
 //-----------------------------------------------------------------------------
 void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
 {
-    char* d = (char*) dst;
-    char* s = (char*) src;
+    // Check for null pointers.
+    if (dst == 0 || src == 0) {
+        ErrorHandler.Report(ErrorMsgNullPointerInMemCopy);
+    }
 
+    if (numChars <= 0) {
+        ErrorHandler.Report(ErrorMsgNumCharsIsZeroInMemCopy);
+    }
+
+    // Overlap check (memcpy rules)
+    // Safe only if:
+    //   dst >= src + numChars   OR   src >= dst + numChars
+    // Otherwise regions overlap in a forward-copy-unsafe way.
+    char* d = (char*)(dst);
+    char* s = (char*)(src);
+
+    if (!(d >= s + numChars || s >= d + numChars)) {
+        ErrorHandler.Report(ErrorMsgOverlapInMemCopy);
+    }
+
+    // Copy loop.
     for (int i = 0; i < numChars; i++) {
         *d++ = *s++;
     }
@@ -1922,6 +1862,12 @@ void TicsNameSpace::MemSet(void* dst, int numChars, char data)
 {
     int i;
     char* d = (char*) dst;
+
+    // Check for null pointer.
+    if (dst == 0) {
+        ErrorHandler.Report(ErrorMsgNullPointerInMemSet);
+    }
+    
 
     for (i = 0; i < numChars; i++) {
         *d++ = data;
@@ -2051,39 +1997,9 @@ void FifoClass::Add(void* item)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Returns a pointer to the current fifo item to be removed.
-///
-/// The item contents must be used on return, otherwise
-/// the slot may be overwritten after a task switch.
-///
-/// \returns Returns 0 if the fifo is empty, otherwise it returns
-/// a pointer to the next item for removal.
-//-----------------------------------------------------------------------------
-void* FifoClass::Remove(void)
-{
-    // If there are no items in the fifo, then return.
-    if (IsEmpty()) {
-        // No items to remove.
-        return 0;
-    }
-
-    // Advance to the next item.
-    Front = Bump(Front);
-
-    //MDM Remove the following if test.
-    if (NumItemsInFifo <= 0) {
-        NumItemsInFifo = NumItemsInFifo;
-    }
-
-    // Update the number of items in the fifo.
-    NumItemsInFifo--;
-
-    // Return the item at the front of the fifo.
-    return Front;
-}
-
-//-----------------------------------------------------------------------------
 /// \brief Copies the next fifo item to remove into the parameter.
+///
+/// \param item - A pointer to where the removed item should be copied. 
 ///
 /// \return Zero if the fifo is empty, otherwise, a pointer to the removed item. 
 //-----------------------------------------------------------------------------
@@ -2092,11 +2008,17 @@ void* FifoClass::Remove(void* item)
     // If there are no items in the fifo, then return.
     if (IsEmpty()) {
         // No items to remove.
-        return 0;
+        ErrorHandler.Report(ErrorMsgAttemptToRemoveFromAnEmptyFifo);
     }
 
+    // Advance to the next item.
+    Front = Bump(Front);
+
+    // Update the number of items in the fifo.
+    NumItemsInFifo--;
+
     // Copy the slot to the item.
-    MemCopy(item, Remove(), SlotSizeInBytes);
+    MemCopy(item, Front, SlotSizeInBytes);
 
     return item;
 }
@@ -2421,11 +2343,10 @@ MemMgrClass::MemMgrClass(void * memoryStart, int memorySizeInBytes) :
 
 //-----------------------------------------------------------------------------
 /// \brief Apply various checks to make sure that the list has not been corrupted.
-/// 
-/// This function is only called if we are in SafeMode.
 //-----------------------------------------------------------------------------
 void ListClass::CheckListIntegrity(void)
 {
+    int loopCounter = 0;
     NodeClass* node;
 
     // Check head and tail pointers.
@@ -2444,17 +2365,11 @@ void ListClass::CheckListIntegrity(void)
     }
 
     // Make sure that we can traverse the list and check each node.
-    for (node = Head; ; node = node->Next) {
-
-        /* MDM 
-        // Make sure that the node has not been inadvertently altered.
-        node->VerifyChecksum();
-
-        // Make sure that the node is still at its original address.
-        if (node != node->OriginalThis) {
-            ErrorHandler.Report(ErrorMsgListIntegrityCheckMsgCorruption);
+    for (node = Head; ; node = node->Next, loopCounter++) {
+        // Check to see if we have too many nodes in the list.
+        if (loopCounter >= DefaultMaxNodes) {
+            ErrorHandler.Report(ErrorMsgListHeadOrTailPriorityIssue);   
         }
-        */
 
         // If we're at the end of the list, then break.
         if (node == Tail) {
@@ -2515,6 +2430,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
 /// \brief Check for a valid msg delay.
 ///
 /// Note that a value of 0 is allowed, but it will timeout on the first timer check.
+///
 /// \param a - The msg to add.
 /// \param b - the msg to add after.
 ///
@@ -2555,6 +2471,7 @@ void TicsBaseClass::operator delete(void * p)
     // Deallocate the task memory block.
     MemMgr.DeAllocate(p);
 }
+
 
 //-----------------------------------------------------------------------------
 /// \brief TicsBaseClass constructor.
@@ -2613,3 +2530,89 @@ bool NodeHeaderClass::SignatureMatches()
     return Signature == SignatureValue ? true : false;
 }
 
+//-----------------------------------------------------------------------------
+/// \brief IsrClass constructor
+//-----------------------------------------------------------------------------
+IsrClass::IsrClass(TaskClass* isrTask, int fifoItemSizeInBytes, int fifoNumItems, void* fifoSpace) 
+: IsrTask(isrTask)
+{
+    if (fifoItemSizeInBytes > 0) {
+        // The user is requesting a fifo, so create one.
+        IsrFifo = new FifoClass(fifoItemSizeInBytes, fifoNumItems, fifoSpace);            
+    }
+    else {
+        // The user does not need a fifo, so we don't create one.
+        IsrFifo = 0;
+    }   
+}
+
+//-----------------------------------------------------------------------------
+/// \brief IsrClass destructor
+//-----------------------------------------------------------------------------
+IsrClass::~IsrClass()
+{
+    // Delete the fifo if it exists.
+    if (IsrFifo != 0) {
+        delete IsrFifo;
+    }
+}
+
+//-----------------------------------------------------------------------------
+/// \brief User handler. Contains the actual Isr code.
+///
+/// No need to save and restore registers, since the SystemHandler, which calls
+/// this function saves and restores registers.
+///
+/// \returns Returns true if data was added to the fifo, otherwise, false.
+//-----------------------------------------------------------------------------
+bool IsrClass::UserHandler()
+{
+    // User code goes here.
+
+    // User return statement goes here. If you have put data into the fifo, then 
+    // return true to indicate that the task that is supposed to read the fifo 
+    // should be scheduled to run. Otherwise, return false.
+    return false;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief General handler which calls the actual user handler.
+///
+/// Saves and restores registers so that the user doesn't have to. The
+/// UserHandler() contains the specific Isr code.
+///
+//-----------------------------------------------------------------------------
+void IsrClass::SystemHandler()
+{
+    bool dataAddedToFifo = false;
+    
+    // Save registers.
+    SaveRegisters();
+
+    // Call the user specific handler.
+    dataAddedToFifo = UserHandler();
+
+    // If a task needs to be scheduled to read fifo data that was collected in the 
+    // UserHandler(), then schedule the task to run when this Isr returns and the 
+    // interrupted task finishes its work.
+    if (dataAddedToFifo && IsrTask != 0) {
+        // Add the task to the InterruptFifo, which will be pulled from the fifo
+        // and scheduled to run when normal operation resumes.
+        InterruptFifo.Add(IsrTask);
+    }
+
+    // Restore registers.
+    RestoreRegisters();
+}
+
+//-----------------------------------------------------------------------------
+/// \brief User handler. Contains the actual Isr code.
+///
+/// No need to save and restore registers, since the SystemHandler, which calls
+/// this function saves and restores registers.
+///
+/// \returns Returns true if data was added to the fifo, otherwise, false.
+//-----------------------------------------------------------------------------
+TaskClass* IsrClass::GetIsrTask()
+{
+}

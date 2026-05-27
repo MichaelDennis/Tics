@@ -55,8 +55,6 @@ typedef unsigned int TimerTickType;
 // Macros
 //-----------------------------------------------------------------------------
 #define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
-#define MsgHasTimedOut(presentTime, endTime) ((((int32_t)(presentTime)) - (endTime)) >= 0)
-#define TEST1 ((int32_t)currentTime) - msg->EndTime
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -109,7 +107,7 @@ enum TicsNamespaceEnum {
         GrantMsg,   TimeoutMsg,     WakeupMsg,      AskMsg,         ReplyMsg,
         OkayMsg,    DeleteTaskMsg,  NotifyMsg,      OnMsg,          OffMsg,
         IsrMsg,     ResetMsg,       StatusMsg, SuccessMsg,          FailMsg,
-        InvalidMsg,
+        InvalidMsg, DataAvailable,
         
         // Users can define their own msg numbers in the range between
         // MinUserMsgNum and MaxUserMsgNum.
@@ -191,6 +189,14 @@ enum TicsNamespaceEnum {
         ErrorNullMsgPtrInCancel = 1067,
         ErrorBadTimerTickCount = 1068,
         ErrorAttemptToDestroyAnUnlinkedNode = 1069,
+        ErrorMsgMaxNumberOfListNodesExceeded = 1070,
+        ErrorMsgAttemptToScheduleANonexistentTask = 1071,
+        ErrorMsgIsrDidNotAddDataToFifo = 1072,
+        ErrorMsgNullPointerInMemCopy = 1073,
+        ErrorMsgNumCharsIsZeroInMemCopy = 1074,
+        ErrorMsgOverlapInMemCopy = 1075,
+        ErrorMsgNullPointerInMemSet = 1076,
+        ErrorMsgAttemptToRemoveFromAnEmptyFifo = 1077,
     };
 };
 
@@ -223,12 +229,17 @@ public:
 
     // Functions
     
+    // Constructor.
     TicsBaseClass();
-   virtual ~TicsBaseClass(void);
-    void *operator new(size_t size);
 
-// Deletes an instance of this class.
-    void operator delete(void* p);
+    // Destructor.
+   virtual ~TicsBaseClass(void);
+
+   // Overrides operator new for all subclasses.
+    static void *operator new(size_t size);
+
+    // Overrides operator delete for all subclasses.
+    static void operator delete(void* p);
 };
 
 //-----------------------------------------------------------------------------
@@ -263,7 +274,7 @@ public:
     {
         // Returns true if this node is (1) in the list whose list id is
         // listId or (2) is not in a list, otherwise, false.
-        return ListId == 0 || listId == ListId;
+        return listId == ListId || ListId == 0;
     }
 
     bool IsInAList()
@@ -345,12 +356,6 @@ public:
 
     /// Destructor.
     ~MsgClass();
-
-    /// Allocates a message from the fixed block pool.
-    void* operator new(size_t size);
-
-    /// Returns a message block to the fixed block pool.
-    void operator delete(void* p);
 
     /// Performs dynamic initialization of the message.
     void Init();
@@ -590,7 +595,6 @@ public:
     // Functions
 private:
     void* Bump(void* item);
-    void* Remove(void);
 public:
     FifoClass(int itemSizeInBytes, int numItems = NumInterruptFifoSlots, void* fifoSpace = 0);
     ~FifoClass();
@@ -601,8 +605,6 @@ public:
     bool IsFull();
     int NumItems();
     void Reset();
-    void* operator new(size_t size);
-    void operator delete(void* p);
 };
 
 //-----------------------------------------------------------------------------
@@ -766,10 +768,6 @@ public:
     void DeleteFromMsgList(
         // The task to delete.
         TaskClass* task);
-    // Creates a new instance of this class.
-    void* operator new(size_t size);
-    // Deletes an instance of this class.
-    void operator delete(void* p);
     // Returns true if any of the bits in the mask are true. 
     bool GetFlag(int mask) {
         // Check the Flags against the mask.
@@ -915,6 +913,44 @@ public:
     void* Allocate(int numBytesRequested);
     void DeAllocate(void* p);
 };
+
+//-----------------------------------------------------------------------------
+// MemMgrClass
+//
+// The MemMgrClass manages a linked list of MemNodeClass objects, each of which
+// contains a list of 
+//-----------------------------------------------------------------------------
+class IsrClass : public TicsBaseClass {
+    public:
+
+    // Data
+    
+    // Isr data, if any, is put in this fifo by the isr, to be consumed By the user space
+    // task IsrTask.
+    FifoClass* IsrFifo = 0;
+    TaskClass* IsrTask = 0;
+
+    // Functions
+
+    // Constructor
+    IsrClass(TaskClass* isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0, void* fifoSpace = 0);
+
+    // Destructor
+    ~IsrClass();
+
+    // The user specific handler.
+    bool UserHandler();
+
+    // The generic handler which calls the actual user specific handler called Userhandler()).
+    void SystemHandler();
+
+    // If you opt to defer Isr handling to a task, this function will schedule the task to run.
+    void ScheduleTask();
+
+    // Get a pointer to the IsrTask task.
+    TaskClass* GetIsrTask();
+};
+
 
 //-----------------------------------------------------------------------------
 // TicsNameSpace External Definitions
