@@ -933,7 +933,8 @@ class IsrClass : public TicsBaseClass {
     // Functions
 
     // Constructor
-    IsrClass(TaskClass* isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0, void* fifoSpace = 0);
+    IsrClass(TaskClass* isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0,
+         void* fifoSpace = 0);
 
     // Destructor
     ~IsrClass();

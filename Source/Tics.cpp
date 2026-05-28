@@ -2532,12 +2532,32 @@ bool NodeHeaderClass::SignatureMatches()
 
 //-----------------------------------------------------------------------------
 /// \brief IsrClass constructor
+///
+/// \param - isrTask - A pointer to the task that should be scheduled to run 
+///  when this Isr returns and the interrupted task finishes its work. If this 
+/// isr does not need to send data to a task, then this parameter can be 0.
+///
+/// \param - fifoItemSizeInBytes - The size of the items that will be sent to 
+/// the task in the fifo. If this isr does not need to send data to a task, 
+/// then this parameter can be 0, and no fifo will be created.
+///
+/// \param - fifoNumItems - The number of items that the fifo can hold. 
+/// This parameter is ignored if fifoItemSizeInBytes is 0, since no fifo 
+/// will be created. Note that the fifo can hold at most (fifoNumItems - 1) items, 
+///since one slot is used to determine whether the fifo is full or empty.
+///
+/// \param - fifoSpace - A pointer to an area at least (fifoItemSizeInBytes * fifoNumItems)
+///  in size that will house the fifo slots. This parameter is ignored if 
+///  fifoItemSizeInBytes is 0, since no fifo will be created. If this parameter is 0, 
+///  then the constructor will allocate space for the fifo if a fifo is requested 
+/// (i.e. if fifoItemSizeInBytes is greater than 0).  
 //-----------------------------------------------------------------------------
-IsrClass::IsrClass(TaskClass* isrTask, int fifoItemSizeInBytes, int fifoNumItems, void* fifoSpace) 
-: IsrTask(isrTask)
+IsrClass::IsrClass(TaskClass* isrTask, int fifoItemSizeInBytes, int fifoNumItems, 
+    void* fifoSpace) : IsrTask(isrTask)
 {
     if (fifoItemSizeInBytes > 0) {
-        // The user is requesting a fifo, so create one.
+        // The user is requesting a fifo, so create one. If this isr does not 
+        // need to send data to a task, then no fifo is needed.
         IsrFifo = new FifoClass(fifoItemSizeInBytes, fifoNumItems, fifoSpace);            
     }
     else {
@@ -2561,17 +2581,17 @@ IsrClass::~IsrClass()
 /// \brief User handler. Contains the actual Isr code.
 ///
 /// No need to save and restore registers, since the SystemHandler, which calls
-/// this function saves and restores registers.
+/// this function takes care of that
 ///
 /// \returns Returns true if data was added to the fifo, otherwise, false.
 //-----------------------------------------------------------------------------
 bool IsrClass::UserHandler()
 {
-    // User code goes here.
+    // Process  the interrupt here.
+    // If IsrTask is not equal to zero,  you should 1. create your data here
+    // and write it to the IsrFifo, and 2. schedule the IsrTask to run by
+    // adding a pointer to the task to the InterruptFifo.
 
-    // User return statement goes here. If you have put data into the fifo, then 
-    // return true to indicate that the task that is supposed to read the fifo 
-    // should be scheduled to run. Otherwise, return false.
     return false;
 }
 
