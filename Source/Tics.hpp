@@ -197,6 +197,8 @@ enum TicsNamespaceEnum {
         ErrorMsgOverlapInMemCopy = 1075,
         ErrorMsgNullPointerInMemSet = 1076,
         ErrorMsgAttemptToRemoveFromAnEmptyFifo = 1077,
+        ErrorMsgInvalidStackSize = 1078,
+        ErrorMsgInvalidPriority = 1079,
     };
 };
 
@@ -553,8 +555,12 @@ public:
         int stackSizeInBytes = DefaultStackSizeInBytes,
         int stackPadSizeInBytes = DefaultStackPadSizeInBytes
     );
+    
     // StackClass destructor.
     ~StackClass();
+
+    // Check for valid stack size.
+    bool StackSizeIsValid(int stackSizeInBytes);
 
     // Checks the stack for validity.
     void Check();
@@ -629,10 +635,8 @@ public:
     FlagsClass Flags;
     // Every task needs its own stack.
     StackClass Stack;
-    // Optional task name. Used in debugging.
-    const char* Name;
-    // Tag number used to id a task when sending a msg between processors.
-    int Tag;
+    // Optional task number. Used in debugging.
+    int Number;
     // When a msg is added to the Ready List where this task is the receiver, 
     // the msg priority is set to this->Priority.
     int Priority;
@@ -644,20 +648,24 @@ public:
     
     // TaskClass constructor
     TaskClass(
-        // Optional task name.
-        const char* name = 0,
-        // Tag number. Used for interprocessor communications.
-        int tag = 0,
+        // Optional task number.
+        int Number = 0,
         // The priority used when a task is scheduled.
         int priority = MediumPriority,
         // The task will be scheduled by Tics when it is created.
         int flags = (ScheduleTaskOnCreationFlag),
         // A stack size of 0 gets the default stack size.
-        int stackSizeInBytes = 0);
+        int stackSizeInBytes = StackClass::DefaultStackSizeInBytes);
     
     // TaskClass destructor
     ~TaskClass();
-        
+
+    // Checks stack size
+    bool StackSizeIsValid(int stackSizeInBytes);
+
+    // Checks user priority.
+    bool UserPriorityIsValid(int priority);
+
     // The Tics task function must be implemented by the user.
     virtual void Task() = 0;
 
@@ -782,13 +790,14 @@ public:
 // Idle Task Class definition.
 class IdleTaskClass : public TaskClass {
 public:
-    // Functions
+
     // Idle Task Class constructor.
     IdleTaskClass(
-        // The task name.
-        char* name = (char*)"IdleTask", 
+        // The task number.
+        int number = 0,
         // Task priority.
-        int priority = IdleTaskPriority) : TaskClass(name, priority) {}
+        int priority = IdleTaskPriority);
+    
         // Task function.
         void Task();
 };
@@ -809,8 +818,8 @@ public:
     // Functions
     TicsSystemTaskClass() :
         TaskClass(
-            // Task name.
-            "TicsSystemTask",
+            // Task number.
+            0,
             // Task priority.
             MediumPriority,
             // Unexpected msgs are dropped.
@@ -938,6 +947,13 @@ class IsrClass : public TicsBaseClass {
 
     // Destructor
     ~IsrClass();
+
+    // Save registers.
+    virtual void SaveIsrRegisters() = 0;
+
+    // Restore context.
+    virtual void RestoreIsrRegisters() = 0;
+
 
     // The user specific handler.
     bool UserHandler();

@@ -51,7 +51,7 @@ SOFTWARE.
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
     // The Tics user increments this counter once per ms.
-    // If TicsFlags.SimualtioMode is true, then this timer is incremented
+    // If TicsFlags.SimulationMode is true, then this timer is incremented
     // every ms by calling ReadSimulatedTimerCount().
     TimerTickType TicsMsTimer;
 
@@ -1190,18 +1190,26 @@ void TicsNameSpace::Suspend()
 /// TaskClass constructor in Tics.hpp.
 //-----------------------------------------------------------------------------
 TaskClass::TaskClass(
-    const char* name,
-    int tag,
+    int number,
     int priority,
     int flags,
     int stackSizeInBytes) :
     Flags(flags),
     Stack(stackSizeInBytes),
-    Name(name),
-    Tag(tag),
+    Number(number),
     Priority(priority), 
     NodeClass()
 {
+    // Check the stack size.
+    if (Stack.StackSizeIsValid(stackSizeInBytes) == false) {
+        ErrorHandler.Report(ErrorMsgInvalidStackSize);
+    }
+
+    // Check the priority.
+    if (UserPriorityIsValid(priority) == false) {
+        ErrorHandler.Report(ErrorMsgInvalidPriority);
+    }
+
     // Add the task to the list of active tasks.
     TaskList.Add(this);
 
@@ -1761,13 +1769,14 @@ bool TaskClass::TaskExists(TaskClass* receiver)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief The IdleTask.
+/// \brief The IdleTask constructor.
 ///
-/// The IdleTask runs when no other tasks are ready to run. It continuously
-/// checks to see if a task has been added to the Ready List, in which case,
-/// it suspends itself so that the other tasks can run. It also checks for
-/// timeouts and interrupts.
 //-----------------------------------------------------------------------------
+    IdleTaskClass::IdleTaskClass(int number, int priority) : TaskClass(number, priority )
+    {
+        Priority = IdleTaskPriority;
+    };
+
 void IdleTaskClass::Task()
 {
     for (;;) {
@@ -2580,18 +2589,23 @@ IsrClass::~IsrClass()
 //-----------------------------------------------------------------------------
 /// \brief User handler. Contains the actual Isr code.
 ///
-/// No need to save and restore registers, since the SystemHandler, which calls
-/// this function takes care of that
+/// 
 ///
 /// \returns Returns true if data was added to the fifo, otherwise, false.
 //-----------------------------------------------------------------------------
 bool IsrClass::UserHandler()
 {
+    // Save context as necessary here.
+    SaveIsrRegisters();
+
     // Process  the interrupt here.
     // If IsrTask is not equal to zero,  you should 1. create your data here
     // and write it to the IsrFifo, and 2. schedule the IsrTask to run by
     // adding a pointer to the task to the InterruptFifo.
 
+    // Restore registers as necessary here.
+    RestoreIsrRegisters();
+    
     return false;
 }
 
@@ -2606,8 +2620,9 @@ void IsrClass::SystemHandler()
 {
     bool dataAddedToFifo = false;
     
-    // Save registers.
-    SaveRegisters();
+    // Save context as necessary here.
+    SaveIsrRegisters();
+
 
     // Call the user specific handler.
     dataAddedToFifo = UserHandler();
@@ -2621,8 +2636,8 @@ void IsrClass::SystemHandler()
         InterruptFifo.Add(IsrTask);
     }
 
-    // Restore registers.
-    RestoreRegisters();
+    // Restore context as necessary here.
+    RestoreIsrRegisters();
 }
 
 //-----------------------------------------------------------------------------
@@ -2635,4 +2650,38 @@ void IsrClass::SystemHandler()
 //-----------------------------------------------------------------------------
 TaskClass* IsrClass::GetIsrTask()
 {
+    return IsrTask;
 }
+
+//-----------------------------------------------------------------------------
+/// \brief Check if the stack size is valid. 
+///
+/// \param stackSizeInBytes - The stack size in bytes to check.
+///
+/// \returns Returns true if the stack size is valid, false otherwise.
+//-----------------------------------------------------------------------------
+bool StackClass::StackSizeIsValid(int stackSizeInBytes)
+{
+    int test1 = this->MaxStackSizeInBytes;
+
+    //return InRange(MinStackSizeInBytes, MaxStackSizeInBytes, stackSizeInBytes);
+
+    return true;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Check if the user priority is valid. 
+///
+/// \param priority - The user priority to check.
+///
+/// \returns Returns true if the user priority is valid, false otherwise.
+//-----------------------------------------------------------------------------
+bool TaskClass::UserPriorityIsValid(int priority)
+{
+    // If this is the IdleTask, then skip the user level check.
+    if (this == &IdleTask && priority == IdleTaskPriority) {
+        return true;
+    }   
+
+    return InRange(LowPriority, HighPriority, priority);
+}   

@@ -85,34 +85,6 @@ SOFTWARE.
 #endif
 
 //-----------------------------------------------------------------------------
-// x86 task switch macros. Select this when running on Linux using g++.
-//-----------------------------------------------------------------------------
-
-#if CPU_TYPE == VSX86
-
-#define SaveRegisters()                             \
-    __asm {                                         \
-        __asm pushad			        			\
-    }
-
-#define RestoreRegisters()                          \
-    __asm {                                         \
-	    __asm popad				    				\
-    }
-
-#define SetStackPointer(variable)	     		    \
-    __asm {                                         \
-	    __asm mov esp, variable			    	    \
-    }
-
-#define GetStackPointer(variable)   				\
-    __asm {                                         \
-        __asm mov variable, esp                     \
-    }
-
-#endif
-
-//-----------------------------------------------------------------------------
 /// ARM32 task switch macros.
 ///
 /// See the following links:
