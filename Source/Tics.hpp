@@ -199,6 +199,7 @@ enum TicsNamespaceEnum {
         ErrorMsgAttemptToRemoveFromAnEmptyFifo = 1077,
         ErrorMsgInvalidStackSize = 1078,
         ErrorMsgInvalidPriority = 1079,
+        ErrorMsgUnsupportedCpuType = 1080,
     };
 };
 
@@ -214,6 +215,7 @@ class TaskClass;
 class FifoClass;
 class MemNodeClass;
 class MemMgrClass;
+class ContextSwitchX86GppClass;
 
 //-----------------------------------------------------------------------------
 // TicsBaseClass
@@ -225,7 +227,7 @@ public:
     // Data
     
     // Unique id number that assigned to an instance on creation and deletion.
-    int IdCounter = 0;
+    inline static int IdCounter = 0;
     // The actual id. See the constructor and destructor.
     int Id;
 
@@ -631,12 +633,12 @@ public:
         DefaultNumTicks = 1000
     };
 
+    // Optional task name. Used in debugging.
+    const char *Name;
     // Flag word that contains various flag bits.
     FlagsClass Flags;
     // Every task needs its own stack.
     StackClass Stack;
-    // Optional task number. Used in debugging.
-    int Number;
     // When a msg is added to the Ready List where this task is the receiver, 
     // the msg priority is set to this->Priority.
     int Priority;
@@ -649,13 +651,13 @@ public:
     // TaskClass constructor
     TaskClass(
         // Optional task number.
-        int Number = 0,
+        const char *Name = 0,
         // The priority used when a task is scheduled.
-        int priority = MediumPriority,
+        int Priority = MediumPriority,
         // The task will be scheduled by Tics when it is created.
-        int flags = (ScheduleTaskOnCreationFlag),
+        int Flags = (ScheduleTaskOnCreationFlag),
         // A stack size of 0 gets the default stack size.
-        int stackSizeInBytes = StackClass::DefaultStackSizeInBytes);
+        int StackSizeInBytes = StackClass::DefaultStackSizeInBytes);
     
     // TaskClass destructor
     ~TaskClass();
@@ -787,19 +789,20 @@ public:
     // Clear all the mask bits in the Flags.
     void ClrFlag(int mask) { Flags.Clr(mask); }
 };
+
 // Idle Task Class definition.
 class IdleTaskClass : public TaskClass {
 public:
 
-    // Idle Task Class constructor.
-    IdleTaskClass(
-        // The task number.
-        int number = 0,
-        // Task priority.
-        int priority = IdleTaskPriority);
-    
-        // Task function.
-        void Task();
+    // Data
+
+    // Functions
+
+    // Constructor.
+    IdleTaskClass(const char *name = 0, int priority = IdleTaskPriority);
+
+    // Task function.
+    void Task();
 };
 
 // All errors call the Report() method.
@@ -818,15 +821,15 @@ public:
     // Functions
     TicsSystemTaskClass() :
         TaskClass(
-            // Task number.
+            // Optional task name. Used for debugging.
             0,
             // Task priority.
             MediumPriority,
             // Unexpected msgs are dropped.
             DropUnexpectedMsgsFlag)
     {
-    }
-    // The app task.
+    };
+    // The task.
     void Task();
 };
 
@@ -924,10 +927,9 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// MemMgrClass
+// IsrClass
 //
-// The MemMgrClass manages a linked list of MemNodeClass objects, each of which
-// contains a list of 
+// The IsrClass manages interrupt service routines.
 //-----------------------------------------------------------------------------
 class IsrClass : public TicsBaseClass {
     public:
@@ -935,8 +937,12 @@ class IsrClass : public TicsBaseClass {
     // Data
     
     // Isr data, if any, is put in this fifo by the isr, to be consumed By the user space
-    // task IsrTask.
+    // task IsrTask. If the isr is self-contaned, and does not defer any data to a user space task, 
+    // then this can be 0. 
     FifoClass* IsrFifo = 0;
+
+    // This is the task in user space that consumes data put in the IsrFifo by the isr. 
+    //If the isr does not produce any data to be deferred to a task, then this can be 0.
     TaskClass* IsrTask = 0;
 
     // Functions
@@ -948,12 +954,13 @@ class IsrClass : public TicsBaseClass {
     // Destructor
     ~IsrClass();
 
-    // Save registers.
+    // Save registers used by the isr. If hardware saves registers, you are still
+    // required to implement this function as a do-nothing function.
     virtual void SaveIsrRegisters() = 0;
 
-    // Restore context.
+    // Restore registers used by the isr. If hardware restores registers, you are still
+    // required to implement this function as a do-nothing function.
     virtual void RestoreIsrRegisters() = 0;
-
 
     // The user specific handler.
     bool UserHandler();
@@ -967,7 +974,6 @@ class IsrClass : public TicsBaseClass {
     // Get a pointer to the IsrTask task.
     TaskClass* GetIsrTask();
 };
-
 
 //-----------------------------------------------------------------------------
 // TicsNameSpace External Definitions

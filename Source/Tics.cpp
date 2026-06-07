@@ -53,8 +53,7 @@ SOFTWARE.
     // The Tics user increments this counter once per ms.
     // If TicsFlags.SimulationMode is true, then this timer is incremented
     // every ms by calling ReadSimulatedTimerCount().
-    TimerTickType TicsMsTimer;
-
+    volatile TimerTickType TicsMsTimer;
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -103,7 +102,7 @@ namespace TicsNameSpace {
     TaskClass *CurrentTask = 0;
 
     // This task runs when no other tasks are ready to run (it's priority is lower than any user or system task).
-    IdleTaskClass IdleTask;
+    IdleTaskClass IdleTask("IdleTask");
     
     // Isr's schedule tasks to run by adding them to this fifo. 
     FifoClass InterruptFifo(sizeof(TaskClass*), NumInterruptFifoSlots);
@@ -131,6 +130,7 @@ namespace TicsNameSpace {
 // Namespaces in use.
 //-----------------------------------------------------------------------------
 using namespace TicsNameSpace;
+using namespace std;
 
 
 //-----------------------------------------------------------------------------
@@ -317,13 +317,11 @@ bool TaskClass::TaskExists(int taskId)
 //-----------------------------------------------------------------------------
 /// \brief Saves the current task's context, and switches to the new task.
 ///
-/// Save the current task's registers on its stack, load the new task's
-/// stack pointer, then pop the new task's registers off its stack, 
-/// and return to the new task (since after popping the registers, the
-/// new task's return address is on the stack).
-///
+/// Since Tics does not use preemptive multi-tasking, we only need to save 
+/// the SP register.
 /// \param newTask - A pointer to the task to switch to.
 //-----------------------------------------------------------------------------
+
 void TaskClass::SwitchTasks(TaskClass * newTask)
 {
      StackType * tempSp = 0;
@@ -334,14 +332,17 @@ void TaskClass::SwitchTasks(TaskClass * newTask)
     // Save the currently running task's registers on the current task's stack.
     SaveRegisters();
 
-    // Save the current task's stack pointer into a local variable.
-    GetStackPointer(tempSp);
-
     // Save the stack pointer so we can resume this task later.
     // Note: the very first time we come through here, there is no current 
     // task running, (signified by CurrentTask being zero), so no need to save 
     // the SP.
     if (CurrentTask != 0) {
+        // Make sure the CurrenTask's stack is valid.
+        CurrentTask->Stack.Check();
+
+        // Save the current task's stack pointer into a local variable.
+        GetStackPointer(tempSp);
+
         // Save the current stack pointer in the current task object.
         CurrentTask->Stack.SavedSp = tempSp;
 
@@ -392,6 +393,7 @@ void TaskClass::SwitchTasks(TaskClass * newTask)
         // to the new task's stack and its return address is now the stack.
     }
 }
+
 
 //-----------------------------------------------------------------------------
 /// \brief For this list, delete all msgs whose Receiver or Sender task matches 
@@ -695,6 +697,10 @@ void DelayListClass::CheckForTimeouts()
             }
         }
     }
+    
+    // Read the current clock tick.
+    currentTime = ReadTickCount();
+
     // Save for the next time we enter this function.
     LastTime = currentTime;
 }
@@ -1190,15 +1196,14 @@ void TicsNameSpace::Suspend()
 /// TaskClass constructor in Tics.hpp.
 //-----------------------------------------------------------------------------
 TaskClass::TaskClass(
-    int number,
+    const char *name,
     int priority,
     int flags,
     int stackSizeInBytes) :
-    Flags(flags),
-    Stack(stackSizeInBytes),
-    Number(number),
+    Name(name),
     Priority(priority), 
-    NodeClass()
+    Flags(flags),
+    Stack(stackSizeInBytes)
 {
     // Check the stack size.
     if (Stack.StackSizeIsValid(stackSizeInBytes) == false) {
@@ -1404,7 +1409,7 @@ MsgClass* TaskClass::Recv(int msgNum)
 /// \return Return a pointer to the found msg, otherwise, 0.
 //-----------------------------------------------------------------------------
 
-MsgClass* TaskClass::Recv(int* msgNumArray, int numMsgs)
+MsgClass* TaskClass::Recv(int *msgNumArray, int numMsgs)
 {
     int i;
     MsgClass* msg = 0;
@@ -1478,9 +1483,9 @@ MsgClass* TaskClass::Wait(int msgNum)
 /// 
 /// \return Returns a pointer to the msg.
 //-----------------------------------------------------------------------------
-MsgClass* TaskClass::Wait(int* msgNumArray, int numMsgs)
+MsgClass* TaskClass::Wait(int *msgNumArray, int numMsgs)
 {
-    MsgClass* msg;
+    MsgClass *msg;
 
     for (;;) {
         // Get the msg.
@@ -1772,9 +1777,8 @@ bool TaskClass::TaskExists(TaskClass* receiver)
 /// \brief The IdleTask constructor.
 ///
 //-----------------------------------------------------------------------------
-    IdleTaskClass::IdleTaskClass(int number, int priority) : TaskClass(number, priority )
+    IdleTaskClass::IdleTaskClass(const char *name, int priority) : TaskClass(name, priority)
     {
-        Priority = IdleTaskPriority;
     };
 
 void IdleTaskClass::Task()
@@ -2589,16 +2593,14 @@ IsrClass::~IsrClass()
 //-----------------------------------------------------------------------------
 /// \brief User handler. Contains the actual Isr code.
 ///
-/// 
-///
 /// \returns Returns true if data was added to the fifo, otherwise, false.
 //-----------------------------------------------------------------------------
 bool IsrClass::UserHandler()
 {
-    // Save context as necessary here.
+    // Save regsiters as necessary here.
     SaveIsrRegisters();
 
-    // Process  the interrupt here.
+    // Process the interrupt here.
     // If IsrTask is not equal to zero,  you should 1. create your data here
     // and write it to the IsrFifo, and 2. schedule the IsrTask to run by
     // adding a pointer to the task to the InterruptFifo.
@@ -2685,3 +2687,5 @@ bool TaskClass::UserPriorityIsValid(int priority)
 
     return InRange(LowPriority, HighPriority, priority);
 }   
+
+

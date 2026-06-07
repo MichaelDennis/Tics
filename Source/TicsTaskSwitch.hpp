@@ -67,7 +67,7 @@ SOFTWARE.
         __asm pushad			        			\
     }
 
-#define RestoreRegisters()                          \
+#define RestoreSysRegisters()                          \
     __asm {                                         \
 	    __asm popad				    				\
     }
@@ -100,7 +100,7 @@ SOFTWARE.
 
 #define SaveRegisters() asm volatile ("stmfd r13!, {r0-r12, r14}")
 
-#define RestoreRegisters() asm volatile ("ldmfd r13!, {r0-r12, r14}")
+#define RestoreSysRegisters() asm volatile ("ldmfd r13!, {r0-r12, r14}")
 
 #define GetStackPointer(var) asm volatile("mov %[result], r13" : [result]"=r" (var))
 
