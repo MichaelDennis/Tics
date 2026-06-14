@@ -74,11 +74,11 @@ enum TicsNamespaceEnum {
         // The number of ints in the Tics dynamic memory space.
         SizeMemMgr = (0x8000 * 2),
         // The default number of interrupt fifo slots.
-        NumInterruptFifoSlots = 16,
+        NumInterfaceFifoSlots = 16,
         // The default size for an interrupt fifo slot.
-        InterruptFifoSlotSize = 8,
+        InterfaceFifoSlotSize = 8,
         // The maximum number of msgs allowed in the array 
-        // passed to the array version of TaskClass::Wait(int* msgs);
+        // passed to the array version of TaskClass::Wait(int *msgs);
         MaxAllowedMsgsInRecv = 8,
         // Array end marker. A general marker used to mark the end
         // of an array.
@@ -120,7 +120,7 @@ enum TicsNamespaceEnum {
     // above. These are just numbers that are passed to 
     // ErrorHandlerClass::Report(int errorNum).
     enum ErrorMsgEnum {
-        ErrorMsgNotDefined = 1001,
+        ErrorMsgArgNotDefined = 1001,
         ErrorSenderOrReceiverNotDefined = 1002,
         ErrorMsgIsAlreadyInAList = 1003,
         ErrorDestinationMsgIsNotInAList = 1004,
@@ -200,6 +200,8 @@ enum TicsNamespaceEnum {
         ErrorMsgInvalidStackSize = 1078,
         ErrorMsgInvalidPriority = 1079,
         ErrorMsgUnsupportedCpuType = 1080,
+        ErrorMsgAttempToDeleteANullNode = 1081,
+        ErrorMsgReceiverTaskDoesNotExist = 1082,
     };
 };
 
@@ -243,7 +245,7 @@ public:
     static void *operator new(size_t size);
 
     // Overrides operator delete for all subclasses.
-    static void operator delete(void* p);
+    static void operator delete(void *p);
 };
 
 //-----------------------------------------------------------------------------
@@ -258,9 +260,9 @@ class NodeClass : public TicsBaseClass {
 public:
     // Data
     // Pointer to the next node in the list.
-    NodeClass* Next;
+    NodeClass *Next;
     // Pointer to the previous node in the list.
-    NodeClass* Prev;
+    NodeClass *Prev;
     // Optional msg data for usage by users.
     int Data;
     // A unique number that identifies a list that this node is in. 
@@ -346,17 +348,17 @@ public:
     TimerTickType EndTime;
 
     /// The task sending the message.
-    TaskClass* Sender;
+    TaskClass *Sender;
 
     /// The task receiving the message.
-    TaskClass* Receiver;
+    TaskClass *Receiver;
 
-    MsgClass(TaskClass* receiver,
+    MsgClass(TaskClass *receiver,
              int msgNum = StartMsg,
              int data = 0,
              int delay = 0,
              int priority = MediumPriority,
-             TaskClass* sender = 0);
+             TaskClass *sender = 0);
 
     /// Destructor.
     ~MsgClass();
@@ -384,10 +386,10 @@ class MsgInfoClass : public TicsBaseClass {
     // The Id number, (not the msgNum), of the msg when it was first created.
     int Id;
     // A pointer to the msg when it was first created.
-    MsgClass * OriginalMsg;
+    MsgClass *OriginalMsg;
 
     // Functions
-    void RegisterOriginalMsg(MsgClass* msg)
+    void RegisterOriginalMsg(MsgClass *msg)
     {
         // Save the msg Id.
         Id = msg->Id;
@@ -396,7 +398,7 @@ class MsgInfoClass : public TicsBaseClass {
         OriginalMsg = msg;
     }
 
-    bool IsOriginalMsg(MsgClass* msg)
+    bool IsOriginalMsg(MsgClass *msg)
     {
         return (msg == OriginalMsg && msg->Id == Id);
     }
@@ -422,25 +424,25 @@ public:
     // The tail of the list.
     NodeClass ActualTail;
     // A pointer to the head of the list.
-    NodeClass* Head;
+    NodeClass *Head;
     // A pointer to the tail of the list.
-    NodeClass* Tail;
+    NodeClass *Tail;
 
     // Functions
     // The ListClass constructor.
     ListClass(int maxNodes = DefaultMaxNodes);
     // Returns true if the arg is the head.
-    bool IsHead(NodeClass* a)
+    bool IsHead(NodeClass *a)
     {
         return a == Head;
     }
     // Returns true if the arg is the tail.
-    bool IsTail(NodeClass* a)
+    bool IsTail(NodeClass *a)
     {
         return a == Tail;
     }
     // Unlinks the node from the list.
-    NodeClass * Unlink(NodeClass* a = 0);
+    NodeClass *Unlink(NodeClass *a = 0);
     // Returns true if the list is empty.
     bool IsEmpty(void);
     // Returns true if the list is not empty.
@@ -448,23 +450,23 @@ public:
     // Returns true if the list is full.
     bool IsFull(void);
     // Inserts node a after node b.
-    void Insert(NodeClass* a, NodeClass* b);
+    void Insert(NodeClass *a, NodeClass *b);
     // Adds the node to the list according to its priority.
-    void AddByPriority(NodeClass* a);
+    void AddByPriority(NodeClass *a);
     // Adds the node to the end of the list.
-    void Add(NodeClass* a);
+    void Add(NodeClass *a);
     // Unlinks the node from the list. Defaults to the first node in the list.
-    NodeClass* Remove(NodeClass* a = 0);
+    NodeClass *Remove(NodeClass *a = 0);
     // Remove and delete all the items in the list.
     void Flush();
     // Remove and delete all occurrences of a node from the list.
     bool Delete(int id);
    // Remove and delete all occurrences of a node from the list.
-    bool Delete(NodeClass* node);
+    bool Delete(NodeClass *node);
     // Run various checks on the list.
     void CheckListIntegrity(void);
     //  Run various check prior to inserting a node into a list.   
-    void DoInsertSafetyChecks(NodeClass* a, NodeClass* b);
+    void DoInsertSafetyChecks(NodeClass *a, NodeClass *b);
 };
 
 //-----------------------------------------------------------------------------
@@ -475,7 +477,7 @@ public:
     class MsgListClass : public ListClass {
     public:
         // Remove all references to a particular class from the list.
-        bool RemoveTaskReferences(TaskClass* task);
+        bool RemoveTaskReferences(TaskClass *task);
 };
 
 //-----------------------------------------------------------------------------
@@ -488,13 +490,13 @@ public:
 
     // Functions
     // Remove all task references from the task list.
-    void RemoveTaskReferences(TaskClass* task, bool removeTheTaskItselfAlso = false);
+    void RemoveTaskReferences(TaskClass *task, bool removeTheTaskItselfAlso = false);
     // Remove the task from the task list.
-    void RemoveTask(TaskClass* task);
+    void RemoveTask(TaskClass *task);
     // Add the task to th task list.
-    void Add(TaskClass* task);
+    void Add(TaskClass *task);
     // Return true if the task exists.
-    bool TaskExists(TaskClass* task, int id = 0);
+    bool TaskExists(TaskClass *task, int id = 0);
     // Return true if the task exists.
     bool TaskExists(int taskId);
 };
@@ -512,7 +514,7 @@ public:
 
     // Functions
     // Adds a msg to be sent out msg->Delay ticks later.
-    void AddByDelay(MsgClass* a);
+    void AddByDelay(MsgClass *a);
     // Checks the DelayList for expired msgs and sends them.
     void CheckForTimeouts();
 };
@@ -545,11 +547,11 @@ public:
     // Stack pad size in bytes.
     int StackPadSizeInBytes;
     // Pointer to the top of the stack.
-    StackType* StackTop;
+    StackType *StackTop;
     // Pointer to the bottom of the stack.
-    StackType* StackBottom;
+    StackType *StackBottom;
     // The stack pointer of a task prior to performing a context switch.
-    StackType* SavedSp;
+    StackType *SavedSp;
 
     // Functions
     // StackClass constructor.
@@ -584,13 +586,13 @@ public:
     // Flag to indicate that the fifo space was malloc'ed.
     bool FifoSpaceWasAllocated;
     // Pointer to the oldest item in the fifo. Items are removed from the front.
-    void* Front;
+    void *Front;
     // Pointer to the newest item in the fifo. Items are added to the rear.
-    void* Rear;
+    void *Rear;
     // This is a pointer to the start of the space where the fifo lives.
-    void* FifoSpace;
+    void *FifoSpace;
     // The last valid byte in the fifo.
-    char* LastFifoByte;
+    char *LastFifoByte;
     // The size of a fifo slot.
     int SlotSizeInBytes;
     // The total number of slots in the fifo.
@@ -602,12 +604,12 @@ public:
 
     // Functions
 private:
-    void* Bump(void* item);
+    void *Bump(void *item);
 public:
-    FifoClass(int itemSizeInBytes, int numItems = NumInterruptFifoSlots, void* fifoSpace = 0);
+    FifoClass(int itemSizeInBytes, int numItems = NumInterfaceFifoSlots, void *fifoSpace = 0);
     ~FifoClass();
-    void Add(void* item);
-    void* Remove(void* item);
+    void Add(void *item);
+    void *Remove(void *item);
     bool IsEmpty();
     bool IsNotEmpty();
     bool IsFull();
@@ -629,6 +631,8 @@ public:
         DropUnexpectedMsgsFlag = 2,
         // If set, a task will be scheduled to run after it is created.
         ScheduleTaskOnCreationFlag = 4,
+        // Set to indicate that this is a system task.
+        SystemTaskFlag = 8,
         // The default numTicks in the Pause(numTicks) member function.
         DefaultNumTicks = 1000
     };
@@ -672,18 +676,18 @@ public:
     virtual void Task() = 0;
 
     // Returns true if the task exists.
-    bool TaskExists(TaskClass* receiver = 0);
+    bool TaskExists(TaskClass *receiver = 0);
     // Returns true if the task exists.
     bool TaskExists(int id);
     // Deletes a sent msg with the given node id. Returns true if the 
     // msg was found and deleted.
-    bool Cancel(MsgClass* msg, int nodeId);
+    bool Cancel(MsgClass *msg, int nodeId);
     // Adds the task to the Ready List. If the task arg is 0, then this task is used.
-    void Schedule(TaskClass* task = 0);
+    void Schedule(TaskClass *task = 0);
     // Send a msg to another task.
-    MsgClass* Send(
+    MsgClass *Send(
         // The task to send the msg to.
-        TaskClass* task,
+        TaskClass *task,
         // The msg number.
         int msgNum = NullMsg,
         // Optional msg data.
@@ -693,9 +697,9 @@ public:
         // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
         // The sender of the msg, If 0, the sender defaults to this.
-        TaskClass* sender = 0);
+        TaskClass *sender = 0);
     // Send msg to a class instance reference. 
-    MsgClass* Send(
+    MsgClass *Send(
         // A reference to the class to send the msg to.
         TaskClass& task,
         // The msg number.
@@ -707,13 +711,13 @@ public:
         // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
         // The sender of the msg, If 0, the sender defaults to this.
-        TaskClass* sender = 0);
+        TaskClass *sender = 0);
     // Send a pre-made msg.
-    MsgClass* Send(MsgClass* msg);
+    MsgClass *Send(MsgClass *msg);
     // Reply to a received msg.
     void Reply(
         // The msg to reply to.
-        MsgClass* receivedMsg,
+        MsgClass *receivedMsg,
         // The msg number.
         int msgNum = NullMsg,
         // Optional msg data.
@@ -723,7 +727,7 @@ public:
         // The msg will be added to the Ready List according to its priority.
         int priority = MediumPriority,
         // The sender of the msg, If 0, the sender defaults to this.
-        TaskClass* sender = 0);
+        TaskClass *sender = 0);
     // Pause for the indicated number of ticks.
     void Pause(
         // The number of ticks to sleep.
@@ -731,7 +735,7 @@ public:
         // The priority of the internal wake-up msg sent to the issuing task.
         int priority = MediumPriority);
     // A msg is sent to to the issuing task after the indicated number of ticks.
-    MsgClass* StartTimer(
+    MsgClass *StartTimer(
         // The number of timer ticks.
         int numTicks = DefaultNumTicks,
         // The priority of the wake-up msg sent to the issuing task.
@@ -742,30 +746,30 @@ public:
     void Yield(void);
     // Sleep until the indicated msg arrives. In AnyMsg is indicated, then the
     // task will wake up on the arrival of any msg number.
-    MsgClass* Wait(
+    MsgClass *Wait(
         // The msg number to wait for.
         int msgNum = AnyMsg);
     // Wait for any msg in an array.
-    MsgClass* Wait(
+    MsgClass *Wait(
         // Wake up the task on receiving any msg in the array.
-        int* msgNumArray, 
+        int *msgNumArray, 
         // The number of msgs in the array.
         int numMsgs);
     // Wait for an item to be added to a fifo.
     void Wait(
         // The fifo to wait on.
-        FifoClass* fifo,
+        FifoClass *fifo,
         // A pointer to the fifo slot that has data after the task resumes. 
-        void* data);
+        void *data);
     // Returns a pointer to the requested msg number if found in MsgList, otherwise
     // a 0 is returned.
-    MsgClass* Recv(
+    MsgClass *Recv(
         // The msg requested. AnyMsg means return the first msg in MsgList. 
         int msgNum = AnyMsg);
     // Search MsgList for any msg in the array and return it if found,
-    MsgClass* Recv(
+    MsgClass *Recv(
         // The msgNum array to search for a match in.
-        int* msgNumArray, 
+        int *msgNumArray, 
         // The number of msgs in the array.
         int numMsgs);
     // Suspend the current task and resume the task at the front of the Ready List.
@@ -773,11 +777,11 @@ public:
     // Save the current task's context and restore the newTask's context.
     void SwitchTasks(
         // The task to switch to.
-        TaskClass* newTask);
+        TaskClass *newTask);
     // Remove all references to the task from MsgList.
     void DeleteFromMsgList(
         // The task to delete.
-        TaskClass* task);
+        TaskClass *task);
     // Returns true if any of the bits in the mask are true. 
     bool GetFlag(int mask) {
         // Check the Flags against the mask.
@@ -845,13 +849,13 @@ public:
     int Signature;
     // Number of bytes requested 
     int NumBytesRequested;
-    MemMgrClass* MemMgrPool;
-    MemNodeClass* Next;
+    MemMgrClass *MemMgrPool;
+    MemNodeClass *Next;
 
     // Functions
-    void Initialize(int numBytesRequested, MemMgrClass* memMgrPool);
+    void Initialize(int numBytesRequested, MemMgrClass *memMgrPool);
     bool SignatureMatches();
-    bool MemMgrMatches(MemMgrClass* memMgrPool);
+    bool MemMgrMatches(MemMgrClass *memMgrPool);
 };
 
 class MemNodeClass : public NodeHeaderClass {
@@ -860,16 +864,16 @@ public:
     unsigned int StartOfUserArea;
 
     // Functions
-    MemNodeClass(int numBytesRequested, MemMgrClass* memMgrSource) : StartOfUserArea(0) {
+    MemNodeClass(int numBytesRequested, MemMgrClass *memMgrSource) : StartOfUserArea(0) {
         Initialize(numBytesRequested, memMgrSource);
     }
 
-    void* UserArea()
+    void *UserArea()
     {
         return &StartOfUserArea;
     }
 
-    void* SystemArea()
+    void *SystemArea()
     {
         return this;
     }
@@ -878,7 +882,7 @@ public:
 class MemNodeListClass : public TicsBaseClass {
 private:
     // Data
-    MemNodeClass* Head;
+    MemNodeClass *Head;
     int NumNodesInList;
 
 public:
@@ -894,8 +898,8 @@ public:
         return NumNodesInList == 0;
     }
 
-    void Add(MemNodeClass* item);
-    MemNodeClass* Remove(int numBytesRequested);
+    void Add(MemNodeClass *item);
+    MemNodeClass *Remove(int numBytesRequested);
 };
 
 //-----------------------------------------------------------------------------
@@ -907,23 +911,23 @@ public:
 class MemMgrClass : public TicsBaseClass {
 private:
     // Data
-    char* MemoryStart;
-    char* MemoryEnd;
+    char *MemoryStart;
+    char *MemoryEnd;
     int CurrentOffset;
     int MemorySizeInBytes;
     int NumBytesAvailable;
     MemNodeListClass NodeList;
 
     // Functions
-    MemNodeClass* AllocateFromMemory(int numBytesRequested);
-    MemNodeClass* AllocateFromList(int numBytesRequested);
+    MemNodeClass *AllocateFromMemory(int numBytesRequested);
+    MemNodeClass *AllocateFromList(int numBytesRequested);
     int NumBytesToAllocate(int numBytesRequested);
 
 public:
     // Functions
-    MemMgrClass(void* memory, int memorySizeInBytes);
-    void* Allocate(int numBytesRequested);
-    void DeAllocate(void* p);
+    MemMgrClass(void *memory, int memorySizeInBytes);
+    void *Allocate(int numBytesRequested);
+    void DeAllocate(void *p);
 };
 
 //-----------------------------------------------------------------------------
@@ -939,17 +943,17 @@ class IsrClass : public TicsBaseClass {
     // Isr data, if any, is put in this fifo by the isr, to be consumed By the user space
     // task IsrTask. If the isr is self-contaned, and does not defer any data to a user space task, 
     // then this can be 0. 
-    FifoClass* IsrFifo = 0;
+    FifoClass *IsrFifo = 0;
 
     // This is the task in user space that consumes data put in the IsrFifo by the isr. 
     //If the isr does not produce any data to be deferred to a task, then this can be 0.
-    TaskClass* IsrTask = 0;
+    TaskClass *IsrTask = 0;
 
     // Functions
 
     // Constructor
-    IsrClass(TaskClass* isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0,
-         void* fifoSpace = 0);
+    IsrClass(TaskClass *isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0,
+         void *fifoSpace = 0);
 
     // Destructor
     ~IsrClass();
@@ -972,7 +976,7 @@ class IsrClass : public TicsBaseClass {
     void ScheduleTask();
 
     // Get a pointer to the IsrTask task.
-    TaskClass* GetIsrTask();
+    TaskClass *GetIsrTask();
 };
 
 //-----------------------------------------------------------------------------
@@ -983,16 +987,18 @@ namespace TicsNameSpace {
     // External definitions.
     extern TicsSystemTaskClass TicsSystemTask;
     extern IdleTaskClass IdleTask;
-    extern TaskClass* CurrentTask;
+    extern TaskClass *CurrentTask;
     extern void Suspend();
     extern ErrorHandlerClass ErrorHandler;
     extern TimerTickType ReadTickCount();
-    extern FifoClass InterruptFifo;
-    extern void Schedule(TaskClass* task, bool inIsr);
-    extern void Send(TaskClass* task, FifoClass* fifo, void* data);
+    extern FifoClass InterfaceFifo;
+    extern void Schedule(TaskClass *task, bool inIsr);
+    extern void Send(TaskClass *task, FifoClass *fifo, void *data);
     extern MsgListClass ReadyList;
     extern DelayListClass DelayList;
+    extern ListClass DeleteList;
     extern FlagsClass TicsFlags;
+    extern TaskListClass TaskList;
 };
 
 //-----------------------------------------------------------------------------

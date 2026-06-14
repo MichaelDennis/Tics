@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2025 Michael Dennis McDonnell
+Copyright (c) 2026 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -93,7 +93,7 @@ namespace TicsNameSpace {
 
     // List of msgs that are marked for deletion. Msgs are valid while in the task that
     // was waiting for the msg. Once the task relinquishes control, Tics deletes the msg.
-    MsgListClass DeleteList;
+    ListClass DeleteList;
 
     // A task that Tics maintains for its own use.
     TicsSystemTaskClass TicsSystemTask;
@@ -104,8 +104,8 @@ namespace TicsNameSpace {
     // This task runs when no other tasks are ready to run (it's priority is lower than any user or system task).
     IdleTaskClass IdleTask("IdleTask");
     
-    // Isr's schedule tasks to run by adding them to this fifo. 
-    FifoClass InterruptFifo(sizeof(TaskClass*), NumInterruptFifoSlots);
+    // Isr's and external CPUs schedule tasks to run by adding them to this fifo. 
+    FifoClass InterfaceFifo(sizeof(TaskClass*), NumInterfaceFifoSlots);
  
     // All errors are handled by calling ErrorHandler.Report().
     ErrorHandlerClass ErrorHandler;
@@ -117,11 +117,11 @@ namespace TicsNameSpace {
     TimerTickType ReadTickCount();
     void CheckForSystemEvents();
     void CheckForInterrupts();
-    void Schedule(TaskClass* task, bool inIsr = false);
-    void Send(TaskClass * task, FifoClass * fifo, void * data);
-    void MemSet(void* dst, int numChars, char data);
-    void MemCopy(void* dst, void* src, int numChars);
-    void SwitchTasks(TaskClass * newTask);
+    void Schedule(TaskClass *task, bool inIsr = false);
+    void Send(TaskClass *task, FifoClass *fifo, void *data);
+    void MemSet(void *dst, int numChars, char data);
+    void MemCopy(void *dst, void *src, int numChars);
+    void SwitchTasks(TaskClass *newTask);
     void Suspend();
     bool DelayIsCorrect(TimerTickType delay);
 };
@@ -164,7 +164,7 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
     }
 
     // Get the stack size in multiples of sizeof(StackType).
-    StackSizeInBytes = (stackSizeInBytes / (int) sizeof(StackType)) * (int) sizeof(StackType);
+    StackSizeInBytes = (stackSizeInBytes / (int) sizeof(StackType)) *(int) sizeof(StackType);
 
     // Set the pad size. The pad is a low water mark at the bottom of the stack.
     StackPadSizeInBytes = stackPadSizeInBytes;
@@ -194,7 +194,7 @@ StackClass::~StackClass(void)
 //-----------------------------------------------------------------------------
 void StackClass::Check(void)
 {
-    StackType* currentSp = 0;
+    StackType *currentSp = 0;
     int stackPadSizeInWords = (StackPadSizeInBytes / (int) sizeof(StackType));
     int unusedStackSizeInBytes;
 
@@ -210,7 +210,7 @@ void StackClass::Check(void)
     }
 
     // Compute the size of the unused stack area.
-    unusedStackSizeInBytes = (currentSp - StackBottom) * (int) sizeof(StackType);
+    unusedStackSizeInBytes = (currentSp - StackBottom) *(int) sizeof(StackType);
 
     // Check to see if the stack pointer is in the pad area.
     if (unusedStackSizeInBytes < StackPadSizeInBytes) {
@@ -232,7 +232,7 @@ void StackClass::Check(void)
 //-----------------------------------------------------------------------------
 /// \brief Adds a TaskClass instance to the TaskList.
 //-----------------------------------------------------------------------------
-void TaskListClass::Add(TaskClass* task)
+void TaskListClass::Add(TaskClass *task)
 {
     ListClass::Add((NodeClass*)task);
 }
@@ -243,15 +243,15 @@ void TaskListClass::Add(TaskClass* task)
 //-----------------------------------------------------------------------------
 void TaskClass::Suspend(void)
 {
-    TaskClass* newTask;
-    MsgClass* msg;
+    TaskClass *newTask;
+    MsgClass *msg;
 
     // Delete msgs that have already been processed by tasks. 
     if (DeleteList.IsNotEmpty()) {
         DeleteList.Flush();
     }
 
-    // Check for timeouts and isr msgs.
+    // Check for timeouts and external msgs (e.g., from an isr or external processor).
     CheckForSystemEvents();
 
         // If there are msgs in the Ready List, then process the next msg. 
@@ -322,21 +322,21 @@ bool TaskClass::TaskExists(int taskId)
 /// \param newTask - A pointer to the task to switch to.
 //-----------------------------------------------------------------------------
 
-void TaskClass::SwitchTasks(TaskClass * newTask)
+void TaskClass::SwitchTasks(TaskClass *newTask)
 {
-     StackType * tempSp = 0;
+     StackType *tempSp = 0;
 
      // Check the TaskList integrity.
      TaskList.CheckListIntegrity();
-
-    // Save the currently running task's registers on the current task's stack.
-    SaveRegisters();
 
     // Save the stack pointer so we can resume this task later.
     // Note: the very first time we come through here, there is no current 
     // task running, (signified by CurrentTask being zero), so no need to save 
     // the SP.
     if (CurrentTask != 0) {
+        // Save the currently running task's registers on the current task's stack.
+        SaveRegisters();
+
         // Make sure the CurrenTask's stack is valid.
         CurrentTask->Stack.Check();
 
@@ -350,17 +350,17 @@ void TaskClass::SwitchTasks(TaskClass * newTask)
         CurrentTask->Stack.Check();
     }
 
-    // Make the current task the newTask.
+    // Make the new task the current task.
     CurrentTask = newTask;
 
     // If this task has not yet been started, then call it directly (since 
     // there is no context to restore).
     if (CurrentTask->Flags.IsClr(TaskStartedFlag)) {
 
-        // Get the new task's stack pointer.
+        // Get the new task's top of stack.
         tempSp = CurrentTask->Stack.StackTop;
 
-        // Load the stack pointer register with the top of the stack.
+        // Point the stack pointer register to the top of the new task's stack.
         SetStackPointer(tempSp);
 
         // Mark the new task as started.
@@ -401,15 +401,15 @@ void TaskClass::SwitchTasks(TaskClass * newTask)
 /// 
 /// \param task - See the description above.
 //-----------------------------------------------------------------------------
-bool MsgListClass::RemoveTaskReferences(TaskClass * task)
+bool MsgListClass::RemoveTaskReferences(TaskClass *task)
 {
-    NodeClass* nextNode;
-    MsgClass* msg;
-    TaskClass* receiverTask;
-    TaskClass* senderTask;
+    NodeClass *nextNode;
+    MsgClass *msg;
+    TaskClass *receiverTask;
+    TaskClass *senderTask;
     bool nodeFound = false;
 
-    for (NodeClass* node = Head->Next; node != Tail; node = nextNode) {
+    for (NodeClass *node = Head->Next; node != Tail; node = nextNode) {
 
         // Save the next node, because we may delete the current node and lose the next pointer.
         nextNode = node->Next;
@@ -441,11 +441,15 @@ bool MsgListClass::RemoveTaskReferences(TaskClass * task)
 ///
 /// \param node - A pointer to the node to remove from the list.
 //-----------------------------------------------------------------------------
-bool ListClass::Delete(NodeClass * compareNode)
+bool ListClass::Delete(NodeClass *compareNode)
 {
-    NodeClass * node;
-    NodeClass * next;
+    NodeClass *node;
+    NodeClass *next;
     bool nodeWasDeleted = false;
+
+    if (compareNode == 0) {
+        ErrorHandler.Report(ErrorMsgAttempToDeleteANullNode);
+    }
 
     for (node = Head->Next; node != Tail; node = next) {
 
@@ -471,8 +475,8 @@ bool ListClass::Delete(NodeClass * compareNode)
 //-----------------------------------------------------------------------------
 bool ListClass::Delete(int id)
 {
-    NodeClass* node;
-    NodeClass* next;
+    NodeClass *node;
+    NodeClass *next;
     bool nodeWasDeleted = false;
 
     for (node = Head->Next; node != Tail; node = next) {
@@ -498,7 +502,7 @@ bool ListClass::Delete(int id)
 ///
 /// \param b - Msg after which msg a is inserted.
 //-----------------------------------------------------------------------------
-void ListClass::Insert(NodeClass* a, NodeClass* b)
+void ListClass::Insert(NodeClass *a, NodeClass *b)
 {
     // Check to see if we're at the maximum allowed number of msgs.
     if (IsFull()) {
@@ -528,7 +532,7 @@ void ListClass::Insert(NodeClass* a, NodeClass* b)
 ///
 /// \return A pointer to the unlinked msg.
 //-----------------------------------------------------------------------------
-NodeClass* ListClass::Unlink(NodeClass* a)
+NodeClass *ListClass::Unlink(NodeClass *a)
 {
     // Unlink the msg.
     a->Prev->Next = a->Next;
@@ -555,9 +559,9 @@ NodeClass* ListClass::Unlink(NodeClass* a)
 ///
 /// \param a - The msg to add.
 //-----------------------------------------------------------------------------
-void ListClass::AddByPriority(NodeClass* a)
+void ListClass::AddByPriority(NodeClass *a)
 {
-    NodeClass* b;
+    NodeClass *b;
     int aPriority;
     int bPriority;
 
@@ -585,7 +589,7 @@ void ListClass::AddByPriority(NodeClass* a)
 //-----------------------------------------------------------------------------
 /// \brief Add a msg to the end of the list.
 //-----------------------------------------------------------------------------
-void ListClass::Add(NodeClass* a)
+void ListClass::Add(NodeClass *a)
 {
     // Insert the msg after the last item in the list (which means in front of the tail).
     Insert(a, Tail->Prev);
@@ -600,11 +604,11 @@ void ListClass::Add(NodeClass* a)
 ///
 /// \param a - The msg to add to the Delay List.
 //-----------------------------------------------------------------------------
-void DelayListClass::AddByDelay(MsgClass* a)
+void DelayListClass::AddByDelay(MsgClass *a)
 {
     // We neeed to assign b because the for loop may be skipped if the list is empty.
-    MsgClass* b = (MsgClass*) Head->Next;
-    NodeClass* node;
+    MsgClass *b = (MsgClass*) Head->Next;
+    NodeClass *node;
 
     for (node = Head->Next; node != Tail; node = node->Next) {
 
@@ -635,10 +639,10 @@ void DelayListClass::AddByDelay(MsgClass* a)
 //-----------------------------------------------------------------------------
 void DelayListClass::CheckForTimeouts()
 {
-    NodeClass* node;
-    NodeClass* nextNode;
-    MsgClass* msg;
-    MsgClass* nextMsg;
+    NodeClass *node;
+    NodeClass *nextNode;
+    MsgClass *msg;
+    MsgClass *nextMsg;
     TimerTickType currentTime;
     int32_t dtCurrent;
     int32_t dtNext;
@@ -750,9 +754,9 @@ bool ListClass::IsFull(void)
 ///
 /// \return The removed node.
 //-----------------------------------------------------------------------------
-NodeClass* ListClass::Remove(NodeClass* a)
+NodeClass *ListClass::Remove(NodeClass *a)
 {
-    NodeClass* node;
+    NodeClass *node;
 
     // If the list is empty, then error.
     if (IsEmpty()) {
@@ -788,9 +792,9 @@ NodeClass* ListClass::Remove(NodeClass* a)
 ///
 /// \return true if the task argument exists and is valid, false otherwise.
 //-----------------------------------------------------------------------------
-bool TaskListClass::TaskExists(TaskClass* task, int id)
+bool TaskListClass::TaskExists(TaskClass *task, int id)
 {
-    TaskClass* tempTask;
+    TaskClass *tempTask;
 
     // Check the task pointer.
     if (task == 0) {
@@ -798,12 +802,14 @@ bool TaskListClass::TaskExists(TaskClass* task, int id)
     }
 
     // Look for the task in the list.
-    for (NodeClass * node = Head->Next; node != Tail; node = node->Next) {
+    for (NodeClass *node = Head->Next; node != Tail; node = node->Next) {
 
         // Convert to a TaskClass object.
         tempTask = (TaskClass*)node;
 
+        // Check to see if the task object exists.
         if (tempTask == task) {
+            // A pointer match has been found. Now check for an id number match.
             if (id == 0) {
                 // The id has not been specified, (0 means it is not specified) so ignore it. Match found.
                 return true;
@@ -834,10 +840,10 @@ bool TaskListClass::TaskExists(TaskClass* task, int id)
 //-----------------------------------------------------------------------------
 bool TaskListClass::TaskExists(int id)
 {
-    TaskClass* task;
+    TaskClass *task;
 
     // Look for the task in the list.
-    for (NodeClass* node = Head->Next; node != Tail; node = node->Next) {
+    for (NodeClass *node = Head->Next; node != Tail; node = node->Next) {
 
         // Convert to a TaskClass object.
         task = (TaskClass*)node;
@@ -857,8 +863,8 @@ bool TaskListClass::TaskExists(int id)
 //-----------------------------------------------------------------------------
 void ListClass::Flush()
 {
-    NodeClass* node;
-    NodeClass* nextNode;
+    NodeClass *node;
+    NodeClass *nextNode;
 
     // Remove and delete each node.
     for (node = Head->Next; node != Tail; node = nextNode) {
@@ -912,7 +918,7 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// to a task, if that is required. The preferred method is for the isr to handle
 /// all necessary work, but if work must be deferred to a task, then this function
 /// must be used.When the task runs, it retrieves the data from the fifo
-/// by using function TaskClass::Wait(FifoClass * fifo, void * data).
+/// by using function TaskClass::Wait(FifoClass *fifo, void *data).
 ///
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo. The fifo can only be used by one isr.
@@ -923,7 +929,7 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// make repeated fifo read calls until the fio read function indicates
 /// that the fifo is empty.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
+void TicsNameSpace::Send(TaskClass *task, FifoClass *fifo, void *data)
 {
     // Add the data block into the task's fifo.
     fifo->Add(data);
@@ -944,7 +950,7 @@ void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
 /// must be used, or the isr can simply do what this function does, i.e., add data to a
 /// fifo, then schedule the task to run. When the task runs, it retrieves the data
 /// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass * fifo, void * data).
+/// TaskClass::Wait(FifoClass *fifo, void *data).
 ///
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo. The fifo can only be used by one isr.
@@ -953,7 +959,7 @@ void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data)
 /// Note: There is no need for a data count, because the fifo knows
 /// its slot size.
 //-----------------------------------------------------------------------------
-void Send(TaskClass * task, FifoClass * fifo, void * data)
+void Send(TaskClass *task, FifoClass *fifo, void *data)
 {
     // Add the data block into the task's fifo.
     fifo->Add(data);
@@ -967,7 +973,7 @@ void Send(TaskClass * task, FifoClass * fifo, void * data)
 ///
 /// See the description given above for TicsNameSpace::Send().
 //-----------------------------------------------------------------------------
-void TaskClass::Wait(FifoClass * fifo, void * data)
+void TaskClass::Wait(FifoClass *fifo, void *data)
 {
     if (fifo->IsNotEmpty()) {
         // Copy the data from the fifo into the data block.
@@ -984,7 +990,7 @@ void TaskClass::Wait(FifoClass * fifo, void * data)
 ///
 /// \param task - The task to remove.
 //-----------------------------------------------------------------------------
-void TaskListClass::RemoveTask(TaskClass* task)
+void TaskListClass::RemoveTask(TaskClass *task)
 {
     if (task == 0) {
         ErrorHandler.Report(ErrorNullPointer);
@@ -1001,13 +1007,10 @@ void TaskListClass::RemoveTask(TaskClass* task)
 /// \param task - The task to remove.
 /// \param removeTheTaskItselfAlso - When finished, remove the task also.
 //-----------------------------------------------------------------------------
-void TaskListClass::RemoveTaskReferences(TaskClass* task, bool removeTheTaskItselfAlso)
+void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItselfAlso)
 {
-    NodeClass* node;
-    TaskClass* tempTask;
-
-    //MDM Check TaskList integrity.
-    tempTask->MsgList.CheckListIntegrity();
+    NodeClass *node;
+    TaskClass *tempTask;
 
     // For each task in the Task List, remove from its msg list all occurrences of task (the arg to this function).
     for (node = Head->Next; node != Tail; node = node->Next) {
@@ -1094,7 +1097,7 @@ TimerTickType TicsNameSpace::ReadRealTickCount()
 ///
 /// \param inIsr - Set to true if this function is being called from an isr.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::Schedule(TaskClass* task, bool inIsr)
+void TicsNameSpace::Schedule(TaskClass *task, bool inIsr)
 {
     // Make sure we have a non-null pointer.
     if (task == 0) {
@@ -1107,7 +1110,7 @@ void TicsNameSpace::Schedule(TaskClass* task, bool inIsr)
         // than the Ready List, to avoid list corruption.
         // All interrupts must remain disabled while within the isr, 
         // otherwise the Interrupt Fifo can be corrupted.
-        InterruptFifo.Add(&task);
+        InterfaceFifo.Add(&task);
     }
     else {
         // Add the task to the Ready List.
@@ -1126,13 +1129,13 @@ void TicsNameSpace::Schedule(TaskClass* task, bool inIsr)
 //-----------------------------------------------------------------------------
 void TicsNameSpace::CheckForInterrupts()
 {
-    TaskClass* task;
+    TaskClass *task;
 
     // If the Interrupt Fifo is not empty, then remove the task from it, and schedule it.
-    while (InterruptFifo.IsNotEmpty()) {
+    while (InterfaceFifo.IsNotEmpty()) {
 
         // Get the task from the Interrupt Fifo.
-        InterruptFifo.Remove(&task);
+        InterfaceFifo.Remove(&task);
 
         // Check for an invalid task.
         if (task == 0) {
@@ -1235,10 +1238,9 @@ TaskClass::~TaskClass()
         ErrorHandler.Report(ErrorAttemptToDeleteANonexistentTask);
     }
 
-    // Although a task can delete itself, we recommend against it. The safe way to
-    // delete a task is to add it to the DeleteList.
+    // Although a task can delete itself, we recommend against it.Have another task delete it.
     if (CurrentTask == this) {
-        ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
+        //MDM ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
     }
 
     // You can't delete system tasks - they're an integral part of Tics.
@@ -1251,26 +1253,29 @@ TaskClass::~TaskClass()
 
     // Check TaskList integrity.
     TaskList.CheckListIntegrity();
+
     // Remove all occurrences of this task from the msg list of all other tasks.
     TaskList.RemoveTaskReferences(this);
 
-    // Check TaskList integrity.
-    ReadyList.CheckListIntegrity();
     // Remove all occurrences of this task object from the Ready List.
     ReadyList.RemoveTaskReferences(this);
 
     // Check TaskList integrity.
     DelayList.CheckListIntegrity();
-    // Remove all occurrences of this task object from the Delayed Msg List.
+
+    // Remove all occurrences of this task object from the DelayList.
     DelayList.RemoveTaskReferences(this);
 
     // Check TaskList integrity.
     TaskList.CheckListIntegrity();
-    // Unlink (remove) the task itself from the task list.
+    
+    //"Remove()" unlinks the task itself from the TaskList, but it does not delete it.
+    // The actual "deletion" of the task is done by the delete operator itself,
+    // which is the code that called this destructor.
     TaskList.Remove(this);
 
-    // Bump the task id to indicate that the task has been deleted.
-    Id++;
+    // The node Id will be bumped in the TicBaseClass, so no need to bump it hear.
+    // Bumping (incrementing) the Id marks the node (TaskClass instance) as changed.
 }
 
 //-----------------------------------------------------------------------------
@@ -1278,12 +1283,12 @@ TaskClass::~TaskClass()
 ///
 /// \param task - The task that we want to remove from this task's msg list.
 //-----------------------------------------------------------------------------
-void TaskClass::DeleteFromMsgList(TaskClass* task)
+void TaskClass::DeleteFromMsgList(TaskClass *task)
 {
-    NodeClass* nextNode;
-    MsgClass* msg;
+    NodeClass *nextNode;
+    MsgClass *msg;
 
-    for (NodeClass* node = MsgList.Head->Next; node != MsgList.Tail; node = nextNode) {
+    for (NodeClass *node = MsgList.Head->Next; node != MsgList.Tail; node = nextNode) {
         
         // Save for use in the for-loop.
         nextNode = node->Next;
@@ -1309,7 +1314,7 @@ void TaskClass::DeleteFromMsgList(TaskClass* task)
 /// \param priority - The priority of the msg.
 /// \param msgNum - The msg number of the msg.
 //-----------------------------------------------------------------------------
-MsgClass * TaskClass::StartTimer(int numTicks, int priority, int msgNum)
+MsgClass *TaskClass::StartTimer(int numTicks, int priority, int msgNum)
 {
     // Check for an invalid Delay value.
     if (DelayIsCorrect(numTicks) == false) {
@@ -1356,10 +1361,10 @@ void TaskClass::Pause(int numTicks, int priority)
 ///
 /// \return Returns the msg if found, otherwise 0.
 //-----------------------------------------------------------------------------
-MsgClass* TaskClass::Recv(int msgNum)
+MsgClass *TaskClass::Recv(int msgNum)
 {
-    NodeClass* nextNode;
-    MsgClass* msg;
+    NodeClass *nextNode;
+    MsgClass *msg;
 
     // If the list is empty, then return 0.
     if (MsgList.IsEmpty()) {
@@ -1367,7 +1372,7 @@ MsgClass* TaskClass::Recv(int msgNum)
     }
 
     // Traverse the list looking for a msg with the desired msg number.
-    for (NodeClass* node = MsgList.Head->Next; node != MsgList.Tail; node = nextNode) {
+    for (NodeClass *node = MsgList.Head->Next; node != MsgList.Tail; node = nextNode) {
 
         // Save the next msg for use in the for loop.
         nextNode = node->Next;
@@ -1409,10 +1414,10 @@ MsgClass* TaskClass::Recv(int msgNum)
 /// \return Return a pointer to the found msg, otherwise, 0.
 //-----------------------------------------------------------------------------
 
-MsgClass* TaskClass::Recv(int *msgNumArray, int numMsgs)
+MsgClass *TaskClass::Recv(int *msgNumArray, int numMsgs)
 {
     int i;
-    MsgClass* msg = 0;
+    MsgClass *msg = 0;
     
     // Check for invalid numMsgs.
     if (numMsgs > MaxAllowedMsgsInRecv) {
@@ -1444,9 +1449,9 @@ MsgClass* TaskClass::Recv(int *msgNumArray, int numMsgs)
 ///
 /// \return Returns A pointer to the msg.
 //-----------------------------------------------------------------------------
-MsgClass* TaskClass::Wait(int msgNum)
+MsgClass *TaskClass::Wait(int msgNum)
 {
-    MsgClass* msg;
+    MsgClass *msg;
 
     for (;;) {
         // Get the msg.
@@ -1466,7 +1471,8 @@ MsgClass* TaskClass::Wait(int msgNum)
 //-----------------------------------------------------------------------------
 /// \brief Wait for any of the msgs listed in an array.
 ///
-/// Note: this function is experimental. 
+/// Note: this function is experimental.
+/// 
 /// If the msg is found, then remove it from the list, and return a pointer 
 /// to it, otherwise, suspend and wait to be rescheduled, which will occur 
 /// when another msg is sent to this task, at which point the task will resume,
@@ -1483,7 +1489,7 @@ MsgClass* TaskClass::Wait(int msgNum)
 /// 
 /// \return Returns a pointer to the msg.
 //-----------------------------------------------------------------------------
-MsgClass* TaskClass::Wait(int *msgNumArray, int numMsgs)
+MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 {
     MsgClass *msg;
 
@@ -1503,7 +1509,7 @@ MsgClass* TaskClass::Wait(int *msgNumArray, int numMsgs)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Delete a previously sent msg.
+/// \brief Cancel a previously sent msg by deleting it.
 ///
 /// Attempt to a remove previously sent msg with the given node Id from the system. 
 ///
@@ -1511,10 +1517,10 @@ MsgClass* TaskClass::Wait(int *msgNumArray, int numMsgs)
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
-bool TaskClass::Cancel(MsgClass* msg, int nodeId)
+bool TaskClass::Cancel(MsgClass *msg, int nodeId)
 {
     // The receiver task's msg list.
-    MsgListClass* msgList = &msg->Receiver->MsgList;
+    MsgListClass *msgList = &msg->Receiver->MsgList;
     
     // Check for a null msg pointer.
     if (msg == 0) {
@@ -1556,9 +1562,9 @@ bool TaskClass::Cancel(MsgClass* msg, int nodeId)
 /// \param task - The task to add to the Ready List. If no parameter is specified,
 /// then "this" task is used.
 //-----------------------------------------------------------------------------
-void TaskClass::Schedule(TaskClass* task)
+void TaskClass::Schedule(TaskClass *task)
 {
-    TaskClass* taskToSchedule;
+    TaskClass *taskToSchedule;
 
     // If no parameter was specified in the call, then default to "this" task object.
     if (task == 0) {
@@ -1601,7 +1607,7 @@ void TaskClass::Yield()
 /// \param sender - The sender of the reply (used for aliasing). if 0, it 
 /// defaults to this.
 //-----------------------------------------------------------------------------
-void TaskClass::Reply(MsgClass* receivedMsg, int msgNum, int data, int delay, int priority, TaskClass* sender)
+void TaskClass::Reply(MsgClass *receivedMsg, int msgNum, int data, int delay, int priority, TaskClass *sender)
 {
     // Reply by sending a msg to the sender of the received msg.
     Send(receivedMsg->Sender, msgNum, data, delay, priority, sender);
@@ -1628,12 +1634,12 @@ void MsgClass::Init()
 /// \param sender - A pointer to the task that is sending the msg.
 //-----------------------------------------------------------------------------
 MsgClass::MsgClass(
-    TaskClass* receiver,
+    TaskClass *receiver,
     int msgNum,
     int data,
     int delay,
     int priority,
-    TaskClass* sender) : NodeClass(data, priority),
+    TaskClass *sender) : NodeClass(data, priority),
     ReceiverId(0),
     MsgNum(msgNum),
     Data(data),
@@ -1664,6 +1670,7 @@ MsgClass::~MsgClass()
 //-----------------------------------------------------------------------------
 void MsgClass::CheckParameters(bool fullCheck)
 {
+    
     // Check if the Priority is within a valid range.
     if (InRange(LowPriority, HighPriority, Priority) == false) {
         ErrorHandler.Report(ErrorMsgPriorityIsOutOfRange);
@@ -1697,15 +1704,15 @@ void MsgClass::CheckParameters(bool fullCheck)
 ///
 /// \return A pointer to the msg that was sent.
 //-----------------------------------------------------------------------------
-MsgClass* TaskClass::Send(
-    TaskClass* receiver,
+MsgClass *TaskClass::Send(
+    TaskClass *receiver,
     int msgNum,
     int data,
     int delay,
     int priority,
-    TaskClass* sender)
+    TaskClass *sender)
 {
-    MsgClass* msg = 0;
+    MsgClass *msg = 0;
 
     // Create the msg.
     msg = new MsgClass(receiver, msgNum, data, delay, priority, sender);
@@ -1722,9 +1729,14 @@ MsgClass* TaskClass::Send(
 ///
 /// \return A pointer to the msg that was sent.
 //-----------------------------------------------------------------------------
-MsgClass * TaskClass::Send(MsgClass* msg)
+MsgClass *TaskClass::Send(MsgClass *msg)
 {
     TimerTickType currentTime;
+
+    // Make sure that the receiver task exists.
+    if (TaskExists(msg->Receiver) == false) {
+        ErrorHandler.Report(ErrorMsgReceiverTaskDoesNotExist);
+    }
 
     // If the sender is 0, then make the sender this task.
     if (msg->Sender == 0) {
@@ -1760,9 +1772,9 @@ MsgClass * TaskClass::Send(MsgClass* msg)
 ///
 /// \return true if the task exists, false otherwise.
 //-----------------------------------------------------------------------------
-bool TaskClass::TaskExists(TaskClass* receiver)
+bool TaskClass::TaskExists(TaskClass *receiver)
 {
-    TaskClass * task = receiver;
+    TaskClass *task = receiver;
 
     // If no parameter was specified, then make the task this task.
     if (task == 0) {
@@ -1814,8 +1826,8 @@ void IdleTaskClass::Task()
 //-----------------------------------------------------------------------------
 void TicsSystemTaskClass::Task()
 {
-    MsgClass * msg;
-    TaskClass * task;
+    MsgClass *msg;
+    TaskClass *task;
 
     for (;;) {
 
@@ -1836,7 +1848,7 @@ void TicsSystemTaskClass::Task()
 /// \param src - Where to copy from.
 /// \param numChars - The number of bytes to copy.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
+void TicsNameSpace::MemCopy(void *dst, void *src, int numChars)
 {
     // Check for null pointers.
     if (dst == 0 || src == 0) {
@@ -1851,8 +1863,8 @@ void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
     // Safe only if:
     //   dst >= src + numChars   OR   src >= dst + numChars
     // Otherwise regions overlap in a forward-copy-unsafe way.
-    char* d = (char*)(dst);
-    char* s = (char*)(src);
+    char *d = (char*)(dst);
+    char *s = (char*)(src);
 
     if (!(d >= s + numChars || s >= d + numChars)) {
         ErrorHandler.Report(ErrorMsgOverlapInMemCopy);
@@ -1871,10 +1883,10 @@ void TicsNameSpace::MemCopy(void* dst, void* src, int numChars)
 /// \param numChars - The number of bytes to copy.
 /// \param data - The byte to copy.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::MemSet(void* dst, int numChars, char data)
+void TicsNameSpace::MemSet(void *dst, int numChars, char data)
 {
     int i;
-    char* d = (char*) dst;
+    char *d = (char*) dst;
 
     // Check for null pointer.
     if (dst == 0) {
@@ -1893,13 +1905,13 @@ void TicsNameSpace::MemSet(void* dst, int numChars, char data)
 /// \param slotSizeInBytes - The size of the fifo array item (slot).
 /// \param numSlots - The number of array items.
 /// \param fifoSpace - A pointer to an area at least 
-/// (slotSizeInBytes * numSlots) in size that will house the fifo slots. If
+/// (slotSizeInBytes *numSlots) in size that will house the fifo slots. If
 /// this parameter is 0, then the constructor will allocate space.
 //-----------------------------------------------------------------------------
 FifoClass::FifoClass(
     int slotSizeInBytes, 
     int numSlots,
-    void* fifoSpace) : 
+    void *fifoSpace) : 
     FifoSpaceWasAllocated(false),
     FifoSpace(fifoSpace)
 {
@@ -1915,7 +1927,7 @@ FifoClass::FifoClass(
     NumSlots = numSlots;
 
     // The number of bytes in the fifo.
-    FifoSizeInBytes = SlotSizeInBytes * NumSlots;
+    FifoSizeInBytes = SlotSizeInBytes *NumSlots;
 
     // Allocate fifo memory if the user did not specify it.
     if (FifoSpace == 0) {
@@ -1973,9 +1985,9 @@ FifoClass::~FifoClass()
 /// \returns		Returns the incremented pointer with wrap-around applied
 ///					as necessary.
 //-----------------------------------------------------------------------------
-void* FifoClass::Bump(void* item)
+void *FifoClass::Bump(void *item)
 {
-    char * nextItemPtr;
+    char *nextItemPtr;
 
     nextItemPtr = (char*) item + SlotSizeInBytes;
 
@@ -1992,7 +2004,7 @@ void* FifoClass::Bump(void* item)
 ///
 /// \param item - A pointer to the item to add to the fifo.
 //-----------------------------------------------------------------------------
-void FifoClass::Add(void* item)
+void FifoClass::Add(void *item)
 {
     // If the fifo is full, then error.
     if (IsFull()) {
@@ -2016,7 +2028,7 @@ void FifoClass::Add(void* item)
 ///
 /// \return Zero if the fifo is empty, otherwise, a pointer to the removed item. 
 //-----------------------------------------------------------------------------
-void* FifoClass::Remove(void* item)
+void *FifoClass::Remove(void *item)
 {
     // If there are no items in the fifo, then return.
     if (IsEmpty()) {
@@ -2109,7 +2121,7 @@ void ErrorHandlerClass::Report(int errorNum)
 ///
 /// \param node - The memory node to add.
 //-----------------------------------------------------------------------------
-void MemNodeListClass::Add(MemNodeClass * node)
+void MemNodeListClass::Add(MemNodeClass *node)
 {
     // If the list is empty, then assign the head to this node.
     if (IsEmpty()) {
@@ -2135,10 +2147,10 @@ void MemNodeListClass::Add(MemNodeClass * node)
 ///
 /// \return A pointer to the node if found, otherwise, 0.
 //-----------------------------------------------------------------------------
-MemNodeClass * MemNodeListClass::Remove(int numBytesRequested)
+MemNodeClass *MemNodeListClass::Remove(int numBytesRequested)
 {
-    MemNodeClass * node;
-    MemNodeClass * prevNode = 0;
+    MemNodeClass *node;
+    MemNodeClass *prevNode = 0;
 
     // If the list is empty, we can't remove.
     if (IsEmpty()) {
@@ -2219,9 +2231,9 @@ int MemMgrClass::NumBytesToAllocate(int numBytesRequested)
 ///
 /// \return A pointer to the memory block.
 //-----------------------------------------------------------------------------
-void * MemMgrClass::Allocate(int numBytesRequested)
+void *MemMgrClass::Allocate(int numBytesRequested)
 {
-    MemNodeClass * node;
+    MemNodeClass *node;
 
     // Try to allocate from a list first, since it's faster and preserves free memory space.
     if ((node = AllocateFromList(numBytesRequested)) != 0) {
@@ -2250,7 +2262,7 @@ void * MemMgrClass::Allocate(int numBytesRequested)
 ///
 /// \return A pointer to the node if found, otherwise, 0.
 //-----------------------------------------------------------------------------
-MemNodeClass * MemMgrClass::AllocateFromList(int numBytesRequested)
+MemNodeClass *MemMgrClass::AllocateFromList(int numBytesRequested)
 {
     // If the list is not empty, return the node at the front of the list,
     // otherwise, if the list is empty, 0 is returned.
@@ -2264,11 +2276,11 @@ MemNodeClass * MemMgrClass::AllocateFromList(int numBytesRequested)
 ///
 /// \return A pointer to the memory node if found, otherwise, 0.
 //-----------------------------------------------------------------------------
-MemNodeClass * MemMgrClass::AllocateFromMemory(int numBytesRequested)
+MemNodeClass *MemMgrClass::AllocateFromMemory(int numBytesRequested)
 {
-    char * p;
+    char *p;
     int numBytesToAllocate;
-    MemNodeClass * node;
+    MemNodeClass *node;
 
     // Add sizeof(NodeHeaderClass) because we need space for the header.
     numBytesToAllocate = NumBytesToAllocate(numBytesRequested);
@@ -2310,7 +2322,7 @@ MemNodeClass * MemMgrClass::AllocateFromMemory(int numBytesRequested)
 ///
 /// \param p - A pointer to the memory block, not including the header.
 //-----------------------------------------------------------------------------
-void MemMgrClass::DeAllocate(void* p)
+void MemMgrClass::DeAllocate(void *p)
 {
     // Check for an attempt to delete a null node.
     if (p == 0) {
@@ -2324,7 +2336,7 @@ void MemMgrClass::DeAllocate(void* p)
         return;
     }
     // Point to the top of the node.
-    MemNodeClass * node = (MemNodeClass*)((char *)p - sizeof(NodeHeaderClass));
+    MemNodeClass *node = (MemNodeClass*)((char *)p - sizeof(NodeHeaderClass));
 
     // Check the signature to make sure that the node has not been corrupted.
     if (node->SignatureMatches() == false) {
@@ -2346,7 +2358,7 @@ void MemMgrClass::DeAllocate(void* p)
 /// \param memoryStart - A pointer to the space to be used for memory block allocation.
 /// \param memorySizeInBytes - The size of memory pointed to by parameter 1.
 //-----------------------------------------------------------------------------
-MemMgrClass::MemMgrClass(void * memoryStart, int memorySizeInBytes) :
+MemMgrClass::MemMgrClass(void *memoryStart, int memorySizeInBytes) :
     MemoryStart((char *)memoryStart), 
     MemoryEnd(((char*) memoryStart + memorySizeInBytes) - 1), 
     CurrentOffset(0),
@@ -2360,7 +2372,7 @@ MemMgrClass::MemMgrClass(void * memoryStart, int memorySizeInBytes) :
 void ListClass::CheckListIntegrity(void)
 {
     int loopCounter = 0;
-    NodeClass* node;
+    NodeClass *node;
 
     // Check head and tail pointers.
     if (Head != &ActualHead || Tail != &ActualTail) {
@@ -2398,11 +2410,11 @@ void ListClass::CheckListIntegrity(void)
 /// \param a - The msg to add.
 /// \param b - the msg to add after.
 //-----------------------------------------------------------------------------
-void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
+void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
 {
     // Both msgs must be defined.
     if (a == 0 || b == 0) {
-        ErrorHandler.Report(ErrorMsgNotDefined);
+        ErrorHandler.Report(ErrorMsgArgNotDefined);
     }
 
     // If msg a is already in a list, then we can't insert it.
@@ -2466,10 +2478,10 @@ void ListClass::DoInsertSafetyChecks(NodeClass* a, NodeClass* b)
 ///
 /// \return A pointer to the allocated memory.
 //-----------------------------------------------------------------------------
-void * TicsBaseClass::operator new(size_t size)
+void *TicsBaseClass::operator new(size_t size)
 {
-    // Allocate a block of memory for the task object.
-    void * p = MemMgr.Allocate((int) size);
+    // Allocate a block of memory for the object.
+    void *p = MemMgr.Allocate((int) size);
 
     return p;
 }
@@ -2479,7 +2491,7 @@ void * TicsBaseClass::operator new(size_t size)
 ///
 /// \param p - A pointer to the allocated space.
 //-----------------------------------------------------------------------------
-void TicsBaseClass::operator delete(void * p)
+void TicsBaseClass::operator delete(void *p)
 {
     // Deallocate the task memory block.
     MemMgr.DeAllocate(p);
@@ -2559,14 +2571,14 @@ bool NodeHeaderClass::SignatureMatches()
 /// will be created. Note that the fifo can hold at most (fifoNumItems - 1) items, 
 ///since one slot is used to determine whether the fifo is full or empty.
 ///
-/// \param - fifoSpace - A pointer to an area at least (fifoItemSizeInBytes * fifoNumItems)
+/// \param - fifoSpace - A pointer to an area at least (fifoItemSizeInBytes *fifoNumItems)
 ///  in size that will house the fifo slots. This parameter is ignored if 
 ///  fifoItemSizeInBytes is 0, since no fifo will be created. If this parameter is 0, 
 ///  then the constructor will allocate space for the fifo if a fifo is requested 
 /// (i.e. if fifoItemSizeInBytes is greater than 0).  
 //-----------------------------------------------------------------------------
-IsrClass::IsrClass(TaskClass* isrTask, int fifoItemSizeInBytes, int fifoNumItems, 
-    void* fifoSpace) : IsrTask(isrTask)
+IsrClass::IsrClass(TaskClass *isrTask, int fifoItemSizeInBytes, int fifoNumItems, 
+    void *fifoSpace) : IsrTask(isrTask)
 {
     if (fifoItemSizeInBytes > 0) {
         // The user is requesting a fifo, so create one. If this isr does not 
@@ -2603,7 +2615,7 @@ bool IsrClass::UserHandler()
     // Process the interrupt here.
     // If IsrTask is not equal to zero,  you should 1. create your data here
     // and write it to the IsrFifo, and 2. schedule the IsrTask to run by
-    // adding a pointer to the task to the InterruptFifo.
+    // adding a pointer to the task to the InterfaceFifo.
 
     // Restore registers as necessary here.
     RestoreIsrRegisters();
@@ -2633,9 +2645,9 @@ void IsrClass::SystemHandler()
     // UserHandler(), then schedule the task to run when this Isr returns and the 
     // interrupted task finishes its work.
     if (dataAddedToFifo && IsrTask != 0) {
-        // Add the task to the InterruptFifo, which will be pulled from the fifo
+        // Add the task to the InterfaceFifo, which will be pulled from the fifo
         // and scheduled to run when normal operation resumes.
-        InterruptFifo.Add(IsrTask);
+        InterfaceFifo.Add(IsrTask);
     }
 
     // Restore context as necessary here.
@@ -2650,7 +2662,7 @@ void IsrClass::SystemHandler()
 ///
 /// \returns Returns true if data was added to the fifo, otherwise, false.
 //-----------------------------------------------------------------------------
-TaskClass* IsrClass::GetIsrTask()
+TaskClass *IsrClass::GetIsrTask()
 {
     return IsrTask;
 }

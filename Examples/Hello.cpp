@@ -1,7 +1,7 @@
 /*
 MIT License
 
-Copyright (c) 2025 Michael Dennis McDonnell
+Copyright (c) 2026 Michael Dennis McDonnell
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files(the "Software"), to deal
@@ -94,9 +94,11 @@ using namespace std;
 //-----------------------------------------------------------------------------
 class HelloTaskClass : public TaskClass {
 public:
+    HelloTaskClass(const char *name) : TaskClass(name) {}
     // Functions
     void Task();
 };
+
 
 //-----------------------------------------------------------------------------
 // Pointer the hello task. Used in main() to create the hello task.
@@ -114,11 +116,13 @@ void HelloTaskClass::Task(void)
     // The task body is always an infinite loop.
 
     for (;;) {
+
         // Output the string "Hello World!World.cpp" followed by a counter value.
         cout << "Hello World! " << i++ << endl;
-        
+
         // Sleep for one second.
         Pause(1000);
+
     }
 }
 
@@ -128,7 +132,7 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
-    HelloTask = new HelloTaskClass();
+    HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.
     Suspend();
