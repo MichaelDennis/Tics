@@ -64,7 +64,6 @@ namespace TicsNameSpace {
 //-----------------------------------------------------------------------------
 // Namespaces enums
 //-----------------------------------------------------------------------------
-enum class Bool32 : uint32_t;
 
 enum TicsNamespaceEnum {
         // The maximum allowed size of a timer.
@@ -231,7 +230,7 @@ public:
     // Unique id number that assigned to an instance on creation and deletion.
     inline static int IdCounter = 0;
     // The actual id. See the constructor and destructor.
-    int Id;
+    int Id = 0;
 
     // Functions
     
@@ -849,7 +848,9 @@ public:
     int Signature;
     // Number of bytes requested 
     int NumBytesRequested;
+    // The memory mgr pool to which this node belongs.
     MemMgrClass *MemMgrPool;
+    // The pointer to the next node in the memory pool list.
     MemNodeClass *Next;
 
     // Functions
@@ -1005,3 +1006,75 @@ namespace TicsNameSpace {
 // End guard
 //-----------------------------------------------------------------------------
 #endif				// TicsGuard
+
+/*
+New ointer checking code.
+
+class TaskClass : public TicsBaseClass {
+public:
+    // Intrusive list pointers (raw, never validated)
+    TaskClass* next = nullptr;
+    TaskClass* prev = nullptr;
+
+    // Constructor / destructor (inherit base behavior)
+    TaskClass() = default;
+    virtual ~TaskClass() = default;
+
+    // Validated operator->
+    TaskClass* operator->() {
+        if (!IsValid()) {
+            HandleInvalidPointer();
+            return nullptr;
+        }
+        return this;
+    }
+
+    // Validated operator*
+    TaskClass& operator*() {
+        if (!IsValid()) {
+            HandleInvalidPointer();
+        }
+        return *this;
+    }
+
+    // Optional: validated operator&
+    TaskClass* operator&() {
+        if (!IsValid()) {
+            HandleInvalidPointer();
+            return nullptr;
+        }
+        return this;
+    }
+
+    // Task behavior examples
+    void Run();
+    void ComputeDeadline();
+
+private:
+    void HandleInvalidPointer() {
+        std::cerr << "Invalid TaskClass pointer detected\n";
+    }
+};
+
+class TicsBaseClass {
+protected:
+    inline static int IdCounter = 0;   // Shared across all Tics objects
+    int Id;                            // Current ID
+    int InitialId;                     // Birth ID for validation by derived classes
+
+public:
+    TicsBaseClass() {
+        Id = ++IdCounter;
+        InitialId = Id;
+    }
+
+    virtual ~TicsBaseClass() {
+        Id = ++IdCounters;   // Mark object as invalid
+    }
+
+    bool IsValid() const {
+        return Id == InitialId;
+    }
+};
+
+*/

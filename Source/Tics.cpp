@@ -439,15 +439,15 @@ bool MsgListClass::RemoveTaskReferences(TaskClass *task)
 /// \brief Remove and delete one or more occurrences of a pointer to a
 /// a node from a list.
 ///
-/// \param node - A pointer to the node to remove from the list.
+/// \param nodeToDelete - A pointer to the node to remove from the list.
 //-----------------------------------------------------------------------------
-bool ListClass::Delete(NodeClass *compareNode)
+bool ListClass::Delete(NodeClass *nodeToDelete)
 {
     NodeClass *node;
     NodeClass *next;
     bool nodeWasDeleted = false;
 
-    if (compareNode == 0) {
+    if (nodeToDelete == 0) {
         ErrorHandler.Report(ErrorMsgAttempToDeleteANullNode);
     }
 
@@ -457,7 +457,7 @@ bool ListClass::Delete(NodeClass *compareNode)
         next = node->Next;
 
         // If the node matches, then delete it.
-        if (node == compareNode) {
+        if (node == nodeToDelete) {
             Remove(node);
             delete node;
             nodeWasDeleted = true;
@@ -1240,7 +1240,7 @@ TaskClass::~TaskClass()
 
     // Although a task can delete itself, we recommend against it.Have another task delete it.
     if (CurrentTask == this) {
-        //MDM ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
+        ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
     }
 
     // You can't delete system tasks - they're an integral part of Tics.
@@ -1543,8 +1543,7 @@ bool TaskClass::Cancel(MsgClass *msg, int nodeId)
     else if (ReadyList.Delete(nodeId)) {
         return true;
     }
-    // Check the Delete List. We're claiming that it is deleted since it is 
-    // scheduled for delete because it i
+    // Check the Delete List. 
     else if (DeleteList.Delete(nodeId)) {
         return true;
     }
@@ -2513,8 +2512,8 @@ TicsBaseClass::TicsBaseClass()
     // TicsBaseClass destructor.
 TicsBaseClass::~TicsBaseClass()
 {
-    // Bump the Id to indicate that the object has been deleted.
-    Id++;
+    // Assign a new Id to indicate that the object has been deleted.
+        Id = ++IdCounter;
 }
 
 //-------------------------Moved functions---------------------------
@@ -2697,6 +2696,7 @@ bool TaskClass::UserPriorityIsValid(int priority)
         return true;
     }   
 
+    // SO, this is a uer task, which means that its priority must be in the range below.
     return InRange(LowPriority, HighPriority, priority);
 }   
 
