@@ -62,7 +62,7 @@ TaskBClass * TaskB;
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    for (;;) {
+    while (true) {
         // Wait for a request to wake up TaskB.
         Wait(RqstMsg);
 
@@ -76,7 +76,7 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    for (;;) {
+    while (true) {
 
         // Send a msg to TaskA to request a msg to wake us up after the Suspend() call.
         Send(TaskA, RqstMsg);

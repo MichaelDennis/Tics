@@ -73,7 +73,7 @@ TaskBClass * TaskB;
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    for (;;) {
+    while (true) {
 
         // Send TaskB a msg.
         Send(TaskB, HelloMsg);
@@ -97,7 +97,7 @@ void TaskBClass::Task()
     MsgClass * msg;
     TaskClass * sender;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a msg named HelloMsg (from TaskA).
         msg = Wait(HelloMsg);

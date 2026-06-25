@@ -105,7 +105,7 @@ void RequesterTaskClass::Task()
 {
     int counter = 0;
 
-    for (;;) {
+    while (true) {
 
         // Send a request to the responder.
         Send(ResponderTask, RequestMsgNum);
@@ -129,7 +129,7 @@ void ResponderTaskClass::Task()
 {
     MsgClass* msg;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a Request msg.
         msg = Wait(RequestMsgNum);

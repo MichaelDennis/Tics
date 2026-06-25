@@ -60,7 +60,7 @@ TaskBClass * TaskB;
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    for (;;) {
+    while (true) {
 
         // Three ways to schedule tasks.
 
@@ -90,7 +90,7 @@ void TaskBClass::Task()
 {
     int counter = 0;
 
-    for (;;) {
+    while (true) {
 
         // Drop all the msgs we receive.
         Wait();

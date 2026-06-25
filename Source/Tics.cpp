@@ -1453,7 +1453,7 @@ MsgClass *TaskClass::Wait(int msgNum)
 {
     MsgClass *msg;
 
-    for (;;) {
+    while (true) {
         // Get the msg.
         msg = Recv(msgNum);
 
@@ -1493,7 +1493,7 @@ MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 {
     MsgClass *msg;
 
-    for (;;) {
+    while (true) {
         // Get the msg.
         msg = Recv(msgNumArray, numMsgs);
 
@@ -1794,7 +1794,7 @@ bool TaskClass::TaskExists(TaskClass *receiver)
 
 void IdleTaskClass::Task()
 {
-    for (;;) {
+    while (true) {
 
         // Check for timeouts and interrupts.
         CheckForSystemEvents();
@@ -1828,7 +1828,7 @@ void TicsSystemTaskClass::Task()
     MsgClass *msg;
     TaskClass *task;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a request msg.
         msg = Wait();
@@ -2107,7 +2107,7 @@ void ErrorHandlerClass::Report(int errorNum)
 {
     volatile int count = 0;
 
-    for (;;) {
+    while (true) {
         // For use while in the debugger.Set count to 1 to break.
         if (count == 1) {
     		break;

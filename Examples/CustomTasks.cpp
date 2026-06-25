@@ -61,7 +61,7 @@ void TaskAClass::Task()
 {
     int portReading;
 
-    for (;;) {
+    while (true) {
         // Read the port value.
         portReading = ReadPort(PortNum);
 

@@ -63,7 +63,7 @@ void TaskAClass::Task()
     int timeoutMsgId;
     int counter = 0;
 
-    for (;;) {
+    while (true) {
         // Send TaskB a msg and save the msg id, which is not the msg number. The msg number is HelloMsg.
         helloMsgId = Send(TaskB, HelloMsg)->Id;
 

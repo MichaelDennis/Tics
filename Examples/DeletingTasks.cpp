@@ -52,7 +52,7 @@ void TaskAClass::Task()
     int loopCounter = 0;
     MsgClass * msg;
 
-    for (;;) {
+    while (true) {
 
         // Loop counter.
         cout << "LoopCounter = " << loopCounter++ << endl;
@@ -96,7 +96,7 @@ void TaskBClass::Task()
 {
     MsgClass * msg;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a msg named HelloMsg (from TaskA).
         msg = Wait(HelloMsg);

@@ -55,7 +55,7 @@ void TaskAClass::Task()
 {
     int i = 0;
 
-    for (;;) {
+    while (true) {
 
         // Send a print request to TaskB.
         Send(TaskB, RqstMsg, i++);
@@ -95,7 +95,7 @@ void TaskBClass::Task()
     // If we're waiting for msgA and we get msgB, then drop it.
     SetFlag(DropUnexpectedMsgsFlag);
 
-    for (;;) {
+    while (true) {
 
         cout << endl << endl << "Num msgs in TaskB msg list is: " << MsgList.NumNodesInList << endl << endl;
 
@@ -120,7 +120,7 @@ void TaskCClass::Task()
     MsgClass * msg;
     TaskClass * sender;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a print request.
         msg = Wait(RqstMsg);

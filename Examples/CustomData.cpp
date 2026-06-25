@@ -74,7 +74,7 @@ void TaskAClass::Task()
     int x, y, z;
     CustomMsgClass * msg;
 
-    for (;;) {
+    while (true) {
 
         // Set the msg data.
         x = counter++;
@@ -104,7 +104,7 @@ void TaskBClass::Task()
 {
     CustomMsgClass * msg;
 
-    for (;;) {
+    while (true) {
 
         // Wait for a msg named HelloMsg (from TaskA).
         msg = (CustomMsgClass *) Wait(HelloMsg);
