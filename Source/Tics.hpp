@@ -203,6 +203,7 @@ enum TicsNamespaceEnum {
         ErrorMsgUnsupportedCpuType = 1080,
         ErrorMsgAttempToDeleteANullNode = 1081,
         ErrorMsgReceiverTaskDoesNotExist = 1082,
+        ErrorMsgCouldNotCancelMsg = 1083,
     };
 
 //-----------------------------------------------------------------------------
@@ -933,68 +934,18 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// IsrClass
-//
-// The IsrClass manages interrupt service routines.
-//-----------------------------------------------------------------------------
-class IsrClass : public TicsBaseClass {
-    public:
-
-    // Data
-    
-    // Isr data, if any, is put in this fifo by the isr, to be consumed By the user space
-    // task IsrTask. If the isr is self-contaned, and does not defer any data to a user space task, 
-    // then this can be 0. 
-    FifoClass *IsrFifo = 0;
-
-    // This is the task in user space that consumes data put in the IsrFifo by the isr. 
-    //If the isr does not produce any data to be deferred to a task, then this can be 0.
-    TaskClass *IsrTask = 0;
-
-    // Functions
-
-    // Constructor
-    IsrClass(TaskClass *isrTask = 0, int fifoItemSizeInBytes = 0, int fifoNumItems = 0,
-         void *fifoSpace = 0);
-
-    // Destructor
-    ~IsrClass();
-
-    // Save registers used by the isr. If hardware saves registers, you are still
-    // required to implement this function as a do-nothing function.
-    virtual void SaveIsrRegisters() = 0;
-
-    // Restore registers used by the isr. If hardware restores registers, you are still
-    // required to implement this function as a do-nothing function.
-    virtual void RestoreIsrRegisters() = 0;
-
-    // The user specific handler.
-    bool UserHandler();
-
-    // The generic handler which calls the actual user specific handler called Userhandler()).
-    void SystemHandler();
-
-    // If you opt to defer Isr handling to a task, this function will schedule the task to run.
-    void ScheduleTask();
-
-    // Get a pointer to the IsrTask task.
-    TaskClass *GetIsrTask();
-};
-
-//-----------------------------------------------------------------------------
 // TicsNameSpace External Definitions
 //-----------------------------------------------------------------------------
 
- extern DelayListClass DelayList;
- extern MsgListClass ReadyList;
+extern DelayListClass DelayList;
+extern MsgListClass ReadyList;
 
 TimerTickType ReadSimulatedTickCount();
 TimerTickType ReadRealTickCount();
 TimerTickType ReadTickCount();
 void CheckForSystemEvents();
 void CheckForInterrupts();
-void Schedule(TaskClass *task, bool inIsr = false);
-void Send(TaskClass *task, FifoClass *fifo, void *data);
+void Schedule(TaskClass *task);
 void MemSet(void *dst, int numChars, char data);
 void MemCopy(void *dst, void *src, int numChars);
 void SwitchTasks(TaskClass *newTask);

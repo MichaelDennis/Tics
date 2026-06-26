@@ -60,8 +60,6 @@ SOFTWARE.
 
 namespace TicsNameSpace {
 
-void Schedule(TaskClass *task, bool inIsr);
-
     // Msgs are created by allocating a memory block from this area.
     // An instance of MemMgrClass class is created to manage this space.
     // (See the definition of MemMgr below).
@@ -886,36 +884,6 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Sends a msg from within an isr to a task.
-///
-/// The normal TaskClass::Send() function cannot be used from within an isr
-/// because the linked list links can get corrupted. Instead, a FifoClass
-/// object is used. The isr adds data items to the fifo and the task retrieves
-/// the objects from the fifo. The isr must use this function to send data
-/// to a task, if that is required. The preferred method is for the isr to handle
-/// all necessary work, but if work must be deferred to a task, then this function
-/// must be used.When the task runs, it retrieves the data from the fifo
-/// by using function TaskClass::Wait(FifoClass *fifo, void *data).
-///
-/// \param task - The task to send the data to.
-/// \param fifo - The task's fifo. The fifo can only be used by one isr.
-/// \param data - The data (msg) to be copied into the fifo slot.
-/// \param schedule - An optional boolean. If true, the task will be
-///
-/// Note: There is no need for a data count, because the task can 
-/// make repeated fifo read calls until the fio read function indicates
-/// that the fifo is empty.
-//-----------------------------------------------------------------------------
-void Send(TaskClass *task, FifoClass *fifo, void *data)
-{
-    // Add the data block into the task's fifo.
-    fifo->Add(data);
-
-    // Add the task to the Interrupt fifo.
-    Schedule(task, true);
-}
-
-//-----------------------------------------------------------------------------
 /// \brief Waits for a fifo msg.
 ///
 /// See the description given above for Send().
@@ -927,7 +895,7 @@ void TaskClass::Wait(FifoClass *fifo, void *data)
         fifo->Remove(data);
     }
     else {
-        // Suspend until the isr sends the msg to the task.
+        // Suspend until a msg is put into the fifo.
         Suspend();
     }
 }
@@ -1033,36 +1001,17 @@ TimerTickType ReadRealTickCount()
 /// The Schedule function is for Tics internal use only. At the user level,
 /// the only approved way to schedule a task is to send a msg to it.
 ///
-/// If inIsr is true, the task is added to the Interrupt Fifo, and will be 
-/// transferred to the Ready List on the next task switch, otherwise, if inIsr
-/// is false, the task is added to the Ready List.
-///
-/// Note: Isr's must not re-enable interrupts - ALL interrupts must remain disabled
-/// for the duration of the isr.
-///
 /// \param task - The task to schedule.
-///
-/// \param inIsr - Set to true if this function is being called from an isr.
 //-----------------------------------------------------------------------------
-void Schedule(TaskClass *task, bool inIsr)
+void Schedule(TaskClass *task)
 {
     // Make sure we have a non-null pointer.
     if (task == 0) {
         ErrorHandler.Report(ErrorNullTaskPointerInSchedule);
     }
 
-    // If we're in an interrupt service routine...
-    if (inIsr) {
-        // Schedule the task by adding it to the Interrupt Fifo, rather
-        // than the Ready List, to avoid list corruption.
-        // All interrupts must remain disabled while within the isr, 
-        // otherwise the Interrupt Fifo can be corrupted.
-        InterfaceFifo.Add(&task);
-    }
-    else {
-        // Add the task to the Ready List.
-        ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
-    }
+    // Add the task to the Ready List.
+    ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
 }
 
 //-----------------------------------------------------------------------------
@@ -1070,15 +1019,16 @@ void Schedule(TaskClass *task, bool inIsr)
 /// Ready List.
 ///
 /// Tasks can't be scheduled directly (by adding to the Ready List) from within 
-/// an isr (otherwise, list corruption could occur). Instead, tasks are scheduled
-/// by adding them to the Interrupt Fifo, and then later moved to the
-/// Ready List. This function is called at each task switch.
+/// an external source like an isr or an external processor. (otherwise, list 
+/// corruption could occur). Instead, tasks are scheduled by adding them to the 
+/// Interrupt Fifo, and then later moved to the Ready List. 
+/// This function is called at each task switch.
 //-----------------------------------------------------------------------------
 void CheckForInterrupts()
 {
     TaskClass *task;
 
-    // If the Interrupt Fifo is not empty, then remove the task from it, and schedule it.
+    // If the Interface Fifo is not empty, then remove the task from it, and schedule it.
     while (InterfaceFifo.IsNotEmpty()) {
 
         // Get the task from the Interrupt Fifo.
@@ -2338,8 +2288,8 @@ void ListClass::CheckListIntegrity(void)
     // Make sure that we can traverse the list and check each node.
     for (node = Head; ; node = node->Next, loopCounter++) {
         // Check to see if we have too many nodes in the list.
-        if (loopCounter >= DefaultMaxNodes) {
-            ErrorHandler.Report(ErrorMsgListHeadOrTailPriorityIssue);   
+        if (loopCounter > DefaultMaxNodes) {
+            ErrorHandler.Report(ErrorMsgMaxNumberOfListNodesExceeded);   
         }
 
         // If we're at the end of the list, then break.
@@ -2499,118 +2449,6 @@ bool NodeHeaderClass::MemMgrMatches(MemMgrClass *memMgrPool)
 bool NodeHeaderClass::SignatureMatches()
 {
     return Signature == SignatureValue ? true : false;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief IsrClass constructor
-///
-/// \param - isrTask - A pointer to the task that should be scheduled to run 
-///  when this Isr returns and the interrupted task finishes its work. If this 
-/// isr does not need to send data to a task, then this parameter can be 0.
-///
-/// \param - fifoItemSizeInBytes - The size of the items that will be sent to 
-/// the task in the fifo. If this isr does not need to send data to a task, 
-/// then this parameter can be 0, and no fifo will be created.
-///
-/// \param - fifoNumItems - The number of items that the fifo can hold. 
-/// This parameter is ignored if fifoItemSizeInBytes is 0, since no fifo 
-/// will be created. Note that the fifo can hold at most (fifoNumItems - 1) items, 
-///since one slot is used to determine whether the fifo is full or empty.
-///
-/// \param - fifoSpace - A pointer to an area at least (fifoItemSizeInBytes *fifoNumItems)
-///  in size that will house the fifo slots. This parameter is ignored if 
-///  fifoItemSizeInBytes is 0, since no fifo will be created. If this parameter is 0, 
-///  then the constructor will allocate space for the fifo if a fifo is requested 
-/// (i.e. if fifoItemSizeInBytes is greater than 0).  
-//-----------------------------------------------------------------------------
-IsrClass::IsrClass(TaskClass *isrTask, int fifoItemSizeInBytes, int fifoNumItems, 
-    void *fifoSpace) : IsrTask(isrTask)
-{
-    if (fifoItemSizeInBytes > 0) {
-        // The user is requesting a fifo, so create one. If this isr does not 
-        // need to send data to a task, then no fifo is needed.
-        IsrFifo = new FifoClass(fifoItemSizeInBytes, fifoNumItems, fifoSpace);            
-    }
-    else {
-        // The user does not need a fifo, so we don't create one.
-        IsrFifo = 0;
-    }   
-}
-
-//-----------------------------------------------------------------------------
-/// \brief IsrClass destructor
-//-----------------------------------------------------------------------------
-IsrClass::~IsrClass()
-{
-    // Delete the fifo if it exists.
-    if (IsrFifo != 0) {
-        delete IsrFifo;
-    }
-}
-
-//-----------------------------------------------------------------------------
-/// \brief User handler. Contains the actual Isr code.
-///
-/// \returns Returns true if data was added to the fifo, otherwise, false.
-//-----------------------------------------------------------------------------
-bool IsrClass::UserHandler()
-{
-    // Save regsiters as necessary here.
-    SaveIsrRegisters();
-
-    // Process the interrupt here.
-    // If IsrTask is not equal to zero,  you should 1. create your data here
-    // and write it to the IsrFifo, and 2. schedule the IsrTask to run by
-    // adding a pointer to the task to the InterfaceFifo.
-
-    // Restore registers as necessary here.
-    RestoreIsrRegisters();
-    
-    return false;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief General handler which calls the actual user handler.
-///
-/// Saves and restores registers so that the user doesn't have to. The
-/// UserHandler() contains the specific Isr code.
-///
-//-----------------------------------------------------------------------------
-void IsrClass::SystemHandler()
-{
-    bool dataAddedToFifo = false;
-    
-    // Save context as necessary here.
-    SaveIsrRegisters();
-
-
-    // Call the user specific handler.
-    dataAddedToFifo = UserHandler();
-
-    // If a task needs to be scheduled to read fifo data that was collected in the 
-    // UserHandler(), then schedule the task to run when this Isr returns and the 
-    // interrupted task finishes its work.
-    if (dataAddedToFifo && IsrTask != 0) {
-        // Add the task to the InterfaceFifo, which will be pulled from the fifo
-        // and scheduled to run when normal operation resumes.
-        InterfaceFifo.Add(IsrTask);
-    }
-
-    // Restore context as necessary here.
-    RestoreIsrRegisters();
-}
-
-//-----------------------------------------------------------------------------
-/// \brief User handler. Contains the actual Isr code.
-///
-/// No need to save and restore registers, since the SystemHandler, which calls
-/// this function saves and restores registers.
-///
-/// \returns Returns true if data was added to the fifo, otherwise, false.
-//-----------------------------------------------------------------------------
-TaskClass *IsrClass::GetIsrTask()
-{
-    return IsrTask;
 }
 
 //-----------------------------------------------------------------------------

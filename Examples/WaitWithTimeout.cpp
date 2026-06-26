@@ -78,7 +78,7 @@ void TaskAClass::Task()
             case HelloMsg:
             // Okay, we received a response back from TaskB, so cancel the timeout msg.
             Cancel(msg, timeoutMsgId);
-            cout << "HelloMsg received from TaskB. Canceled timeout msg." << endl;
+            cout << "HelloMsg- received from TaskB. Canceled timeout msg." << endl;
             break;
 
             case TimeoutMsg:
