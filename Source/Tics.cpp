@@ -44,7 +44,6 @@ SOFTWARE.
 #include <stdint.h>
 #include "Tics.hpp"
 #include "TicsTaskSwitch.hpp"
-#include <iostream>
 #include <time.h>
 
 //-----------------------------------------------------------------------------
@@ -56,11 +55,12 @@ SOFTWARE.
     volatile TimerTickType TicsMsTimer;
 
 //-----------------------------------------------------------------------------
-// Namespaces
+// Start TicsNameSpace
 //-----------------------------------------------------------------------------
+
 namespace TicsNameSpace {
 
-    // TicsNameSpace Data
+void Schedule(TaskClass *task, bool inIsr);
 
     // Msgs are created by allocating a memory block from this area.
     // An instance of MemMgrClass class is created to manage this space.
@@ -109,29 +109,6 @@ namespace TicsNameSpace {
  
     // All errors are handled by calling ErrorHandler.Report().
     ErrorHandlerClass ErrorHandler;
-
-    // TicsNameSpace functions.
-
-    TimerTickType ReadSimulatedTickCount();
-    TimerTickType ReadRealTickCount();
-    TimerTickType ReadTickCount();
-    void CheckForSystemEvents();
-    void CheckForInterrupts();
-    void Schedule(TaskClass *task, bool inIsr = false);
-    void Send(TaskClass *task, FifoClass *fifo, void *data);
-    void MemSet(void *dst, int numChars, char data);
-    void MemCopy(void *dst, void *src, int numChars);
-    void SwitchTasks(TaskClass *newTask);
-    void Suspend();
-    bool DelayIsCorrect(TimerTickType delay);
-};
-
-//-----------------------------------------------------------------------------
-// Namespaces in use.
-//-----------------------------------------------------------------------------
-using namespace TicsNameSpace;
-using namespace std;
-
 
 //-----------------------------------------------------------------------------
 /// \brief StackClass constructor. Allocates stack space and defines the stack protective pad.
@@ -929,36 +906,6 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// make repeated fifo read calls until the fio read function indicates
 /// that the fifo is empty.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::Send(TaskClass *task, FifoClass *fifo, void *data)
-{
-    // Add the data block into the task's fifo.
-    fifo->Add(data);
-
-    // Add the task to the Interrupt fifo.
-    Schedule(task, true);
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Sends a msg from within an isr to a task.
-///
-/// The normal TaskClass::Send() function cannot be used from within an isr
-/// because the linked list links can get corrupted. Instead, a FifoClass
-/// object is used. The isr adds data items to the fifo and the task retrieves
-/// the objects from the fifo. The isr must use this function to send data
-/// to a task, if that is required. The preferred method is for the isr to handle
-/// all necessary work, but if work must be deferred to a task, then this function
-/// must be used, or the isr can simply do what this function does, i.e., add data to a
-/// fifo, then schedule the task to run. When the task runs, it retrieves the data
-/// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass *fifo, void *data).
-///
-/// \param task - The task to send the data to.
-/// \param fifo - The task's fifo. The fifo can only be used by one isr.
-/// \param data - The data (msg) to be copied into the fifo slot.
-///
-/// Note: There is no need for a data count, because the fifo knows
-/// its slot size.
-//-----------------------------------------------------------------------------
 void Send(TaskClass *task, FifoClass *fifo, void *data)
 {
     // Add the data block into the task's fifo.
@@ -971,7 +918,7 @@ void Send(TaskClass *task, FifoClass *fifo, void *data)
 //-----------------------------------------------------------------------------
 /// \brief Waits for a fifo msg.
 ///
-/// See the description given above for TicsNameSpace::Send().
+/// See the description given above for Send().
 //-----------------------------------------------------------------------------
 void TaskClass::Wait(FifoClass *fifo, void *data)
 {
@@ -1033,7 +980,7 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 ///
 /// \return The current system tick count reading.
 //-----------------------------------------------------------------------------
-TimerTickType TicsNameSpace::ReadTickCount()
+TimerTickType ReadTickCount()
 {
     // If we are in simulation mode, read the OS clock.
     if (TicsFlags.IsSet(SimulationMode)) {
@@ -1049,7 +996,7 @@ TimerTickType TicsNameSpace::ReadTickCount()
 ///
 /// \return The current system tick count reading.
 //-----------------------------------------------------------------------------
-TimerTickType TicsNameSpace::ReadSimulatedTickCount()
+TimerTickType ReadSimulatedTickCount()
 {
     TimerTickType tickCount;
 
@@ -1074,7 +1021,7 @@ TimerTickType TicsNameSpace::ReadSimulatedTickCount()
 ///
 /// \return The current hardware clock count reading.
 //-----------------------------------------------------------------------------
-TimerTickType TicsNameSpace::ReadRealTickCount()
+TimerTickType ReadRealTickCount()
 {
     // TicsMsTimer is a Tics global that is incremented by the user every 1 ms.
     return TicsMsTimer;
@@ -1097,7 +1044,7 @@ TimerTickType TicsNameSpace::ReadRealTickCount()
 ///
 /// \param inIsr - Set to true if this function is being called from an isr.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::Schedule(TaskClass *task, bool inIsr)
+void Schedule(TaskClass *task, bool inIsr)
 {
     // Make sure we have a non-null pointer.
     if (task == 0) {
@@ -1127,7 +1074,7 @@ void TicsNameSpace::Schedule(TaskClass *task, bool inIsr)
 /// by adding them to the Interrupt Fifo, and then later moved to the
 /// Ready List. This function is called at each task switch.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::CheckForInterrupts()
+void CheckForInterrupts()
 {
     TaskClass *task;
 
@@ -1155,7 +1102,7 @@ void TicsNameSpace::CheckForInterrupts()
 //-----------------------------------------------------------------------------
 /// \brief Check for interrupt msgs and msg timeouts. For Tics system use only.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::CheckForSystemEvents()
+void CheckForSystemEvents()
 {
     // Check for msgs in the Interrupt Fifo.
     CheckForInterrupts();
@@ -1171,7 +1118,7 @@ void TicsNameSpace::CheckForSystemEvents()
 /// Typically you would have created tasks in main() prior
 /// to invoking this function.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::Suspend()
+void Suspend()
 {
     // Suspend the current task, and run the next task in the Ready List.
     TicsSystemTask.Suspend();
@@ -1847,7 +1794,7 @@ void TicsSystemTaskClass::Task()
 /// \param src - Where to copy from.
 /// \param numChars - The number of bytes to copy.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::MemCopy(void *dst, void *src, int numChars)
+void MemCopy(void *dst, void *src, int numChars)
 {
     // Check for null pointers.
     if (dst == 0 || src == 0) {
@@ -1882,7 +1829,7 @@ void TicsNameSpace::MemCopy(void *dst, void *src, int numChars)
 /// \param numChars - The number of bytes to copy.
 /// \param data - The byte to copy.
 //-----------------------------------------------------------------------------
-void TicsNameSpace::MemSet(void *dst, int numChars, char data)
+void MemSet(void *dst, int numChars, char data)
 {
     int i;
     char *d = (char*) dst;
@@ -2460,7 +2407,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
 ///
 /// \return true if the delay is within bounds, false otherwise.
 //-----------------------------------------------------------------------------
-    bool TicsNameSpace::DelayIsCorrect(TimerTickType delay)
+    bool DelayIsCorrect(TimerTickType delay)
     {
         if (delay < 0 || delay > MaxTimerSize) {
             return false;
@@ -2700,4 +2647,8 @@ bool TaskClass::UserPriorityIsValid(int priority)
     return InRange(LowPriority, HighPriority, priority);
 }   
 
+//-----------------------------------------------------------------------------
+/// End namespace TicsNameSpace
+//-----------------------------------------------------------------------------
+}
 

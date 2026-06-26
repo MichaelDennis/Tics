@@ -29,14 +29,21 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Start guard
 //-----------------------------------------------------------------------------
-#ifndef TicsGuard
-#define TicsGuard
+#ifndef TicsHppGuard
+#define TicsHppGuard
 
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdint.h>
+
+//-----------------------------------------------------------------------------
+/// Start TicsNameSpace.
+///
+/// Enclose almost the entire header file in the TicsNameSpace.
+//-----------------------------------------------------------------------------
+namespace TicsNameSpace {
 
 //-----------------------------------------------------------------------------
 // Typedefs
@@ -55,11 +62,6 @@ typedef unsigned int TimerTickType;
 // Macros
 //-----------------------------------------------------------------------------
 #define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
-
-//-----------------------------------------------------------------------------
-// Namespaces
-//-----------------------------------------------------------------------------
-namespace TicsNameSpace {
 
 //-----------------------------------------------------------------------------
 // Namespaces enums
@@ -202,7 +204,6 @@ enum TicsNamespaceEnum {
         ErrorMsgAttempToDeleteANullNode = 1081,
         ErrorMsgReceiverTaskDoesNotExist = 1082,
     };
-};
 
 //-----------------------------------------------------------------------------
 // Namespaces 
@@ -984,97 +985,34 @@ class IsrClass : public TicsBaseClass {
 // TicsNameSpace External Definitions
 //-----------------------------------------------------------------------------
 
-namespace TicsNameSpace {
-    // External definitions.
-    extern TicsSystemTaskClass TicsSystemTask;
-    extern IdleTaskClass IdleTask;
-    extern TaskClass *CurrentTask;
-    extern void Suspend();
-    extern ErrorHandlerClass ErrorHandler;
-    extern TimerTickType ReadTickCount();
-    extern FifoClass InterfaceFifo;
-    extern void Schedule(TaskClass *task, bool inIsr);
-    extern void Send(TaskClass *task, FifoClass *fifo, void *data);
-    extern MsgListClass ReadyList;
-    extern DelayListClass DelayList;
-    extern ListClass DeleteList;
-    extern FlagsClass TicsFlags;
-    extern TaskListClass TaskList;
+ extern DelayListClass DelayList;
+ extern MsgListClass ReadyList;
+
+TimerTickType ReadSimulatedTickCount();
+TimerTickType ReadRealTickCount();
+TimerTickType ReadTickCount();
+void CheckForSystemEvents();
+void CheckForInterrupts();
+void Schedule(TaskClass *task, bool inIsr = false);
+void Send(TaskClass *task, FifoClass *fifo, void *data);
+void MemSet(void *dst, int numChars, char data);
+void MemCopy(void *dst, void *src, int numChars);
+void SwitchTasks(TaskClass *newTask);
+void Suspend();
+bool DelayIsCorrect(TimerTickType delay);
+
+//-----------------------------------------------------------------------------
+// End TicsNameSpace.   
+//-----------------------------------------------------------------------------
 };
+
+//-----------------------------------------------------------------------------
+// Exposes the classes (and their inherited allocators) to the user cleanly.
+//-----------------------------------------------------------------------------
+using namespace TicsNameSpace;
 
 //-----------------------------------------------------------------------------
 // End guard
 //-----------------------------------------------------------------------------
-#endif				// TicsGuard
+#endif				// TicsHppGuard
 
-/*
-New ointer checking code.
-
-class TaskClass : public TicsBaseClass {
-public:
-    // Intrusive list pointers (raw, never validated)
-    TaskClass* next = nullptr;
-    TaskClass* prev = nullptr;
-
-    // Constructor / destructor (inherit base behavior)
-    TaskClass() = default;
-    virtual ~TaskClass() = default;
-
-    // Validated operator->
-    TaskClass* operator->() {
-        if (!IsValid()) {
-            HandleInvalidPointer();
-            return nullptr;
-        }
-        return this;
-    }
-
-    // Validated operator*
-    TaskClass& operator*() {
-        if (!IsValid()) {
-            HandleInvalidPointer();
-        }
-        return *this;
-    }
-
-    // Optional: validated operator&
-    TaskClass* operator&() {
-        if (!IsValid()) {
-            HandleInvalidPointer();
-            return nullptr;
-        }
-        return this;
-    }
-
-    // Task behavior examples
-    void Run();
-    void ComputeDeadline();
-
-private:
-    void HandleInvalidPointer() {
-        std::cerr << "Invalid TaskClass pointer detected\n";
-    }
-};
-
-class TicsBaseClass {
-protected:
-    inline static int IdCounter = 0;   // Shared across all Tics objects
-    int Id;                            // Current ID
-    int InitialId;                     // Birth ID for validation by derived classes
-
-public:
-    TicsBaseClass() {
-        Id = ++IdCounter;
-        InitialId = Id;
-    }
-
-    virtual ~TicsBaseClass() {
-        Id = ++IdCounters;   // Mark object as invalid
-    }
-
-    bool IsValid() const {
-        return Id == InitialId;
-    }
-};
-
-*/
