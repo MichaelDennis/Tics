@@ -29,10 +29,6 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
 /// \brief A basic overview of the operation of the Tics RTOS
 //-----------------------------------------------------------------------------
 
@@ -47,18 +43,19 @@ SOFTWARE.
 #include <time.h>
 
 //-----------------------------------------------------------------------------
-// Globals, externs, and statics.
-//-----------------------------------------------------------------------------
-    // The Tics user increments this counter once per ms.
-    // If TicsFlags.SimulationMode is true, then this timer is incremented
-    // every ms by calling ReadSimulatedTimerCount().
-    volatile TimerTickType TicsMsTimer;
-
-//-----------------------------------------------------------------------------
 // Start TicsNameSpace
 //-----------------------------------------------------------------------------
 
 namespace TicsNameSpace {
+
+//-----------------------------------------------------------------------------
+// Globals, externs, and statics.
+//-----------------------------------------------------------------------------
+    // The Tics user increments this counter once per ms.
+    // If TicsFlags.SimulationMode is true, then the user is not required
+    // to increment this counter, because Tics reads the Linux system
+    // clock to obtain the current tick value. See ReadTickCount().
+    volatile TimerTickType TicsMsTimer;
 
     // Msgs are created by allocating a memory block from this area.
     // An instance of MemMgrClass class is created to manage this space.
@@ -71,7 +68,7 @@ namespace TicsNameSpace {
     // as being similar to malloc(), with member functions to allocate and
     // deallocate memory. A chunk of memory needs to be provided to the
     // MemMgrClass constructor, from which blocks of memory are carved
-    // out when needed.
+    // out when needed. See MemMgrSpace[] above.
     MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
 
     // Various flags used by Tics.
@@ -423,7 +420,7 @@ bool ListClass::Delete(NodeClass *nodeToDelete)
     bool nodeWasDeleted = false;
 
     if (nodeToDelete == 0) {
-        ErrorHandler.Report(ErrorMsgAttempToDeleteANullNode);
+        ErrorHandler.Report(ErrorAttemptToDeleteANullNode);
     }
 
     for (node = Head->Next; node != Tail; node = next) {
@@ -484,7 +481,7 @@ void ListClass::Insert(NodeClass *a, NodeClass *b)
         ErrorHandler.Report(ErrorMsgListIsFullCannotInsert);
     }
 
-    // Check for any issues before inesrting the node a after b..
+    // Check for any issues before inserting the node a after b..
     DoInsertSafetyChecks(a, b);
 
     // Insert the msg.
@@ -581,7 +578,7 @@ void ListClass::Add(NodeClass *a)
 //-----------------------------------------------------------------------------
 void DelayListClass::AddByDelay(MsgClass *a)
 {
-    // We neeed to assign b because the for loop may be skipped if the list is empty.
+    // We need to assign b because the for loop may be skipped if the list is empty.
     MsgClass *b = (MsgClass*) Head->Next;
     NodeClass *node;
 
@@ -946,6 +943,10 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 //-----------------------------------------------------------------------------
 /// \brief Read and return the tick count from the system clock.
 ///
+/// When running Tics on Linux, (simulation mode), we read the time tick
+/// using the Linux time tick, otherwise, we read it from the the global
+/// variable stored in shared RAM, which is updated continuously by the user.
+///
 /// \return The current system tick count reading.
 //-----------------------------------------------------------------------------
 TimerTickType ReadTickCount()
@@ -955,6 +956,7 @@ TimerTickType ReadTickCount()
         return ReadSimulatedTickCount();
     }
     else {
+        //Otherwise, return the hardware updated tick count which is controlled by the user.
         return ReadRealTickCount();
     }
 }
@@ -993,6 +995,17 @@ TimerTickType ReadRealTickCount()
 {
     // TicsMsTimer is a Tics global that is incremented by the user every 1 ms.
     return TicsMsTimer;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Read and return the tick count from the hardware clock.
+///
+/// \return The current hardware clock count reading.
+//-----------------------------------------------------------------------------
+TimerTickType WriteRealTickCount(TimerTickType tickCount)
+{
+    // TicsMsTimer is a Tics global in shared RAM that is incremented by the user every 1 ms.
+    return TicsMsTimer == tickCount;
 }
 
 //-----------------------------------------------------------------------------
@@ -1055,7 +1068,7 @@ void CheckForInterrupts()
 void CheckForSystemEvents()
 {
     // Check for msgs in the Interrupt Fifo.
-    CheckForInterrupts();
+    CheckForInterrupts(); 
 
     // Check for expired timers.
     DelayList.CheckForTimeouts();
@@ -1416,14 +1429,19 @@ MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 //-----------------------------------------------------------------------------
 bool TaskClass::Cancel(MsgClass *msg, int nodeId)
 {
-    // The receiver task's msg list.
-    MsgListClass *msgList = &msg->Receiver->MsgList;
-    
+
     // Check for a null msg pointer.
     if (msg == 0) {
-        ErrorHandler.Report(ErrorNullMsgPtrInCancel);
         return false;
     }
+    
+    // If the receiver task is not in the task list, then return false.
+    if (TaskExists(msg->Receiver) == false) {
+        return false;
+    }
+
+    // The receiver task's msg list.
+    MsgListClass *msgList = &msg->Receiver->MsgList;
     
     // If the msg has not been deleted, it should be in one of the following
     // lists. If the msg has not been found in any of these, false is returned.
@@ -1773,7 +1791,49 @@ void MemCopy(void *dst, void *src, int numChars)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Copy a byte to a block of memory.
+/// \brief Determine if two null terminated strings match.
+///
+/// \param a - String a.
+/// \param b = String b.
+//-----------------------------------------------------------------------------
+bool StringCompare(const char *a, const char *b)
+{
+    // Check for null pointers.
+    if (a == 0 || b == 0) {
+        return false;
+    }
+
+    // If either string is empty, then fail.
+    if (*a == 0 || *b == 0) {
+        return false;
+    }
+
+    // Compare loop.
+    for (int i = 0; i < (MaxNumStringChars - 1); i++) {
+        // If the characters don't match, then fail.
+        if (*a != *b) {
+            return false;
+        }
+
+        // Since we have fallen to here, that means the the above comparison failed,
+        // which means that *a and *b are equal to one another. If they are both equal, 
+        // and both *a and *b equal 0, then then we have a match.
+        if (*a == 0 && *b == 0) {
+            return true;
+        }
+
+        // Increment the string pointers.
+        a++;
+        b++;
+    }
+
+    // If we've come to here, then the strings don't match or they 
+    // are monger than the limit allowed by 
+    return false;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Write a block of memory with the indicated byte value.
 ///
 /// \param dst - Where to copy to.
 /// \param numChars - The number of bytes to copy.
@@ -1789,7 +1849,6 @@ void MemSet(void *dst, int numChars, char data)
         ErrorHandler.Report(ErrorMsgNullPointerInMemSet);
     }
     
-
     for (i = 0; i < numChars; i++) {
         *d++ = data;
     }
@@ -2045,7 +2104,10 @@ void MemNodeListClass::Add(MemNodeClass *node)
 //-----------------------------------------------------------------------------
 MemNodeClass *MemNodeListClass::Remove(int numBytesRequested)
 {
+    // Node used in the for loop;
     MemNodeClass *node;
+
+    // The current node will become the previous node when we're done.
     MemNodeClass *prevNode = 0;
 
     // If the list is empty, we can't remove.
@@ -2484,6 +2546,43 @@ bool TaskClass::UserPriorityIsValid(int priority)
     // SO, this is a uer task, which means that its priority must be in the range below.
     return InRange(LowPriority, HighPriority, priority);
 }   
+
+//-----------------------------------------------------------------------------
+/// \brief Returns a pointer to a task object, given the task name.
+///
+/// The task name is a variable length string. It is the first argument
+/// of the TaskClass constructor. You may not have noticed it because
+/// it is an optional arg and defaults to 0, so you probably won't see
+/// it being used in most of the examples. However, isr's or remote
+/// processors that want to communicate with the main Tics processor
+/// need that actual task pointer to send the msg to, so, those tasks
+/// that will receive isr or remote processor msgs, must invoke the task
+/// constructor with the task name as the first arg. All task names
+// must be unique. For example:HelloTask = new HelloTaskClass("Hello");
+///
+/// \returns Returns true if the user priority is valid, false otherwise.
+//-----------------------------------------------------------------------------
+TaskClass *TaskListClass::GetTaskPointer(const char *name)
+{
+    TaskClass *task;
+
+    // Look for the task in the list.
+    for (NodeClass *node = Head->Next; node != Tail; node = node->Next) {
+
+        // Convert to a TaskClass object.
+        task = (TaskClass*)node;
+
+        // Compare the task name to our target name.
+        if (StringCompare(name, task->Name)) {
+            return task;
+        }
+    }
+    // If no match is found, report an error.
+       ErrorHandler.Report(ErrorMsgNoMatchForTaskName);
+
+       // To make the compiler happy, since we won't return from reporting the error.
+       return 0;
+}
 
 //-----------------------------------------------------------------------------
 /// End namespace TicsNameSpace
