@@ -301,11 +301,13 @@ void TaskClass::SwitchTasks(TaskClass *newTask)
      // Check the TaskList integrity.
      TaskList.CheckListIntegrity();
 
-    // Save the stack pointer so we can resume this task later.
-    // Note: the very first time we come through here, there is no current 
-    // task running, (signified by CurrentTask being zero), so no need to save 
-    // the SP.
-    if (CurrentTask != 0) {
+
+    // If a task is started in main(), following by a call to Suspend(), we
+    // end up here. In this situation, there is no CurrentTask, so we don't save
+    // the CurrentTask's context, since there is no CurrentTask (which is
+    // flagged by CurrenTask == 0). Otherwise, we always save the context
+    // of the CurrentTask, if it exists.
+     if (CurrentTask != 0) {
         // Save the currently running task's registers on the current task's stack.
         SaveRegisters();
 
@@ -358,14 +360,10 @@ void TaskClass::SwitchTasks(TaskClass *newTask)
         // Note that all local variables are now invalid, since the
         // the stack pointer register was changed above.
 
-        // Make sure the new stack is valid.
-        CurrentTask->Stack.Check();
-
         // We will now return to the new task, since we have changed the stack
         // to the new task's stack and its return address is now the stack.
     }
 }
-
 
 //-----------------------------------------------------------------------------
 /// \brief For this list, delete all msgs whose Receiver or Sender task matches 

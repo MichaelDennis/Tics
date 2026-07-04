@@ -1161,6 +1161,7 @@ public:
     void DeAllocate(void *p);
 };
 
+
 //-----------------------------------------------------------------------------
 // TicsNameSpace External Definitions
 //-----------------------------------------------------------------------------
@@ -1200,6 +1201,14 @@ bool DelayIsCorrect(TimerTickType delay);
 enum TaskNumEnums {
 
 };
+
+//-----------------------------------------------------------------------------
+// IsrPacketClass
+//
+// Defines the format of the isr packet which is used to send data from
+// a remote device through cache coherent shared RAM.
+//-----------------------------------------------------------------------------
+
 
 //-----------------------------------------------------------------------------
 // End TicsNameSpace.   

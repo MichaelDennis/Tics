@@ -1,4 +1,8 @@
 # --- Build Artifacts (The "Noise") ---
+
+#Ignore the Sandbox folder
+Sandbox/
+
 # Ignore the entire bin folder and common binary extensions
 Bin/
 *.o
