@@ -10,7 +10,9 @@
                 "-g",
                 "-m32",
                 "${file}",
+                "-O0",
                 "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/TaskSwitch.s",
                 "-o",
                 "${workspaceFolder}/Bin/${fileBasenameNoExtension}"
             ],

@@ -39,6 +39,11 @@ SOFTWARE.
 #include <stdint.h>
 
 //-----------------------------------------------------------------------------
+/// Externals
+//-----------------------------------------------------------------------------
+extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp);
+
+//-----------------------------------------------------------------------------
 /// Start TicsNameSpace.
 ///
 /// Enclose almost the entire header file in the TicsNameSpace.
@@ -104,7 +109,10 @@ enum TicsNamespaceEnum {
         WatchDogFlag = 2, 
         
         // When set, Tics runs on WSL or a Linux PC instead of the embedded system.
-        SimulationMode = 4
+        SimulationMode = 4,
+
+        // A mask used to align an address on a 16 byte boundary.
+        SixteenByteBoundaryMask = ~0xf,
    };
 
     // Linked list node priority. Used to determine where a node is inserted into a linked list.
@@ -237,6 +245,7 @@ enum TicsNamespaceEnum {
         ErrorMsgNullPointerInMemCompare = 1084,
         ErrorMsgMaxNumCharsIsZeroInMemCompare = 1085,
         ErrorMsgNoMatchForTaskName = 1086,
+        ErrorMsgAttemptToReturnFromATask = 1087,
     };
 
 //-----------------------------------------------------------------------------
@@ -643,6 +652,9 @@ public:
     // StackClass destructor.
     ~StackClass();
 
+    // Prime the stack.
+    void PrimeStack();
+
     // Check for valid stack size.
     bool StackSizeIsValid(int stackSizeInBytes);
 
@@ -954,6 +966,7 @@ public:
     }
 };
 
+
 // Idle Task Class definition.
 class IdleTaskClass : public TaskClass {
 
@@ -963,6 +976,21 @@ public:
 
     // Constructor.
     IdleTaskClass(const char *name = 0, int priority = IdleTaskPriority);
+
+    // Task function.
+    void Task();
+};
+
+
+// spStartup Task Class definition.
+class StartupTaskClass : public TaskClass {
+
+public:
+
+    // Functions
+
+    // Constructor.
+    StartupTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0);
 
     // Task function.
     void Task();
@@ -1191,6 +1219,8 @@ void MemCopy(void *dst, void *src, int numChars);
 void SwitchTasks(TaskClass *newTask);
 void Suspend();
 bool DelayIsCorrect(TimerTickType delay);
+void TrampolineToErrorHandler();
+void TrampolineToNewTask();
 
 //-----------------------------------------------------------------------------
 /// \brief Task numbers are used for sending msgs from within an isr

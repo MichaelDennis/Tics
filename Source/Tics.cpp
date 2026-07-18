@@ -43,14 +43,20 @@ SOFTWARE.
 #include <time.h>
 
 //-----------------------------------------------------------------------------
+// Globals, externs, and statics.
+//-----------------------------------------------------------------------------
+
+void TrampolineToErrorHandler();
+
+void TrampolineToNewTask();
+
+
+//-----------------------------------------------------------------------------
 // Start TicsNameSpace
 //-----------------------------------------------------------------------------
 
 namespace TicsNameSpace {
 
-//-----------------------------------------------------------------------------
-// Globals, externs, and statics.
-//-----------------------------------------------------------------------------
     // The Tics user increments this counter once per ms.
     // If TicsFlags.SimulationMode is true, then the user is not required
     // to increment this counter, because Tics reads the Linux system
@@ -93,8 +99,14 @@ namespace TicsNameSpace {
     // A task that Tics maintains for its own use.
     TicsSystemTaskClass TicsSystemTask;
 
+    // Pointer to the task that will be running after a context switch. CurrentTask is
+    // set to NextTask immediately after the context switch.
+    TaskClass *NextTask = 0;
+
+    StartupTaskClass StartupTask("StartupTask, MediumPriority, 0");
+
     // Pointer to the task that is currently running.
-    TaskClass *CurrentTask = 0;
+    TaskClass *CurrentTask = &StartupTask;
 
     // This task runs when no other tasks are ready to run (it's priority is lower than any user or system task).
     IdleTaskClass IdleTask("IdleTask");
@@ -148,8 +160,60 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
     // to the top of the stack, so no need to subtract 1 in the equation below.)
     StackTop = StackBottom + (StackSizeInBytes / sizeof(StackType));
 
+    // Force the StackTop to the proper byte boundary.
+    
     // Fill the entire stack area with a pattern. Used as a way to detect stack overflow.
     MemSet(StackBottom, StackSizeInBytes, DefaultStackPadBytePattern);
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Primes the task's stack so that it can resume execution.
+///
+/// Note that the first time
+//-----------------------------------------------------------------------------
+void StackClass::PrimeStack()
+{
+    // 1. Start at the absolute top of the allocated stack memory
+    StackType rawSp = (StackType) StackTop;
+
+    // 2. Force the starting address to a multiple of 16 (ends in 0x0)
+    rawSp &= SixteenByteBoundaryMask;
+
+    // 2.1 Save the adjusted StackTop as it is now a multiple of 16 per ABI rules.
+    StackTop = (StackType *) rawSp;
+
+    // Convert it back to your StackType pointer so pointer arithmetic works
+    StackType *sp = (StackType *) rawSp;
+
+    // 3. Alignment Padding (4 bytes)
+    // Pushing 8 items total (32 bytes) keeps the 16-byte boundary perfectly balanced.
+    *(--sp) = 0; 
+
+    // 4. Task Function Argument placeholder (4 bytes)
+    // You mentioned the task accepts no args, but standard cdecl expects 
+    // a slot here right above the return address.
+    *(--sp) = 0;
+
+    // 5. Push the ErrorHandler address. 
+    // If the task loop ends and hits a 'ret', it will pop this and jump to the handler.
+    *(--sp) = (StackType) TrampolineToErrorHandler; 
+
+    // 6. Push the actual starting STATIC function address.
+    // Replace '&TaskClass::StaticTaskRunner' with whatever your static wrapper is named.
+    *(--sp) = (StackType) TrampolineToNewTask;
+
+    // 7. Push fake preserved registers (4 registers = 16 bytes)
+    // These match the 4 'popl' instructions in TaskSwitch (%edi, %esi, %ebx, %ebp)
+    *(--sp) = 0; // Fake %ebp (0 terminates stack frame debug traces)
+    *(--sp) = 1; // Fake %ebx
+    *(--sp) = 2; // Fake %esi
+    *(--sp) = 3; // Fake %edi
+    
+    // Save the sp so it can be restored during a context switch.
+    SavedSp = sp;
+
+    // Return the perfectly aligned stack pointer for the assembly routine
+    return;
 }
 
 //-----------------------------------------------------------------------------
@@ -215,7 +279,6 @@ void TaskListClass::Add(TaskClass *task)
 //-----------------------------------------------------------------------------
 void TaskClass::Suspend(void)
 {
-    TaskClass *newTask;
     MsgClass *msg;
 
     // Delete msgs that have already been processed by tasks. 
@@ -233,20 +296,20 @@ void TaskClass::Suspend(void)
         msg = (MsgClass*) ReadyList.Remove();
 
         // Get the next task to run.
-        newTask = msg->Receiver;
+        NextTask = msg->Receiver;
 
         // Make sure that the receiver task is a non-null pointer.
-        if (newTask == 0) {
+        if (NextTask == 0) {
             ErrorHandler.Report(ErrorTheNextTaskToRunPtrIsNull);
         }
 
         // Make sure the receiver task exists.
-        if (newTask->TaskExists() == false) {
+        if (NextTask->TaskExists() == false) {
             ErrorHandler.Report(ErrorTheNextTaskToRunDoesNotExist);
         }
 
         // Make sure that the receiver task was not deleted and returned to the free list or recycled.
-        if (msg->ReceiverId != newTask->Id) {
+        if (msg->ReceiverId != NextTask->Id) {
             ErrorHandler.Report(ErrorTaskIdMismatchCorruptedMsg);
         }
 
@@ -259,16 +322,16 @@ void TaskClass::Suspend(void)
         }
         else {
             // Add the msg to the task's msg list. 
-            newTask->MsgList.AddByPriority(msg);
+            NextTask->MsgList.AddByPriority(msg);
         }
     }
     else {
         // Otherwise, if the ReadyList is empty, then run the IdleTask.
-        newTask = &IdleTask;
+        NextTask = &IdleTask;
     }
 
-    // Switch to the new task.
-    SwitchTasks(newTask);
+    // Call the assmeblylanguage task switcher.
+    TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp);
 }
 
 //-----------------------------------------------------------------------------
@@ -284,85 +347,6 @@ void TaskClass::Suspend(void)
 bool TaskClass::TaskExists(int taskId)
 {
     return TaskList.TaskExists(taskId);
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Saves the current task's context, and switches to the new task.
-///
-/// Since Tics does not use preemptive multi-tasking, we only need to save 
-/// the SP register.
-/// \param newTask - A pointer to the task to switch to.
-//-----------------------------------------------------------------------------
-
-void TaskClass::SwitchTasks(TaskClass *newTask)
-{
-     StackType *tempSp = 0;
-
-     // Check the TaskList integrity.
-     TaskList.CheckListIntegrity();
-
-
-    // If a task is started in main(), following by a call to Suspend(), we
-    // end up here. In this situation, there is no CurrentTask, so we don't save
-    // the CurrentTask's context, since there is no CurrentTask (which is
-    // flagged by CurrenTask == 0). Otherwise, we always save the context
-    // of the CurrentTask, if it exists.
-     if (CurrentTask != 0) {
-        // Save the currently running task's registers on the current task's stack.
-        SaveRegisters();
-
-        // Make sure the CurrenTask's stack is valid.
-        CurrentTask->Stack.Check();
-
-        // Save the current task's stack pointer into a local variable.
-        GetStackPointer(tempSp);
-
-        // Save the current stack pointer in the current task object.
-        CurrentTask->Stack.SavedSp = tempSp;
-
-        // Do a stack check before we switch to the new task.
-        CurrentTask->Stack.Check();
-    }
-
-    // Make the new task the current task.
-    CurrentTask = newTask;
-
-    // If this task has not yet been started, then call it directly (since 
-    // there is no context to restore).
-    if (CurrentTask->Flags.IsClr(TaskStartedFlag)) {
-
-        // Get the new task's top of stack.
-        tempSp = CurrentTask->Stack.StackTop;
-
-        // Point the stack pointer register to the top of the new task's stack.
-        SetStackPointer(tempSp);
-
-        // Mark the new task as started.
-        CurrentTask->Flags.Set(TaskStartedFlag);
-
-        // Call the new task directly.
-        CurrentTask->Task();
-
-        // If we've ended up here, then the task has executed a return, which is not allowed.
-        ErrorHandler.Report(ErrorReturningFromATaskIsNotAllowed);
-    }
-    else {
-        // Get the new task's stack pointer to a variable so that we can 
-        // access it in assembly language.
-        tempSp = CurrentTask->Stack.SavedSp;
-
-        // Load the stack pointer register.
-        SetStackPointer(tempSp);
-
-        // Restore the registers from the new stack.
-        RestoreRegisters();
-
-        // Note that all local variables are now invalid, since the
-        // the stack pointer register was changed above.
-
-        // We will now return to the new task, since we have changed the stack
-        // to the new task's stack and its return address is now the stack.
-    }
 }
 
 //-----------------------------------------------------------------------------
@@ -1133,6 +1117,9 @@ TaskClass::TaskClass(
     if (Flags.IsSet(ScheduleTaskOnCreationFlag)) {
         Schedule(this);
     }
+
+    // Fake out the task's previous call to TaskSwitch(). See PrimeStack() for details.
+    Stack.PrimeStack();
 }
 
 //-----------------------------------------------------------------------------
@@ -1695,6 +1682,31 @@ bool TaskClass::TaskExists(TaskClass *receiver)
   
     // Return true if the task exists in the Task List.
     return TaskList.TaskExists(task);
+}
+
+//-----------------------------------------------------------------------------
+/// \brief The StartupTask constructor.
+//-----------------------------------------------------------------------------
+ StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags) : TaskClass(name, priority, flags)
+ {
+    // This is a dummy tsk used for startup. We just need the task object. We don't
+    // Want to run it.
+    ClrFlag(ScheduleTaskOnCreationFlag);
+ };
+
+//-----------------------------------------------------------------------------
+/// \brief The StartupTask.
+///
+/// This is a dummy task for sole purpose of a task to serve as the
+/// CurrentTask so that the very first context switch will have a CurrentTask
+/// to refer to.
+//-----------------------------------------------------------------------------
+void StartupTaskClass::Task()
+{
+    while (true) {
+        // Suspend this task and neve return.
+        Suspend();
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -2580,6 +2592,21 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 
        // To make the compiler happy, since we won't return from reporting the error.
        return 0;
+}
+
+//-----------------------------------------------------------------------------
+/// Helper Functions
+//-----------------------------------------------------------------------------
+void TrampolineToErrorHandler()
+{
+    ErrorHandler.Report(ErrorMsgAttemptToReturnFromATask);
+}
+
+void TrampolineToNewTask()
+{
+    CurrentTask = NextTask;
+
+    CurrentTask->Task();
 }
 
 //-----------------------------------------------------------------------------
