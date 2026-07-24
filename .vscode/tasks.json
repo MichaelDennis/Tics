@@ -3,22 +3,148 @@
     "tasks": [
         {
             "type": "cppbuild",
-            "label": "Build Tics to Bin (m32)",
+            "label": "Build Tics (x86 Linux Hosted)",
             "command": "/usr/bin/g++",
             "args": [
                 "-I${workspaceFolder}/Source",
                 "-g",
                 "-m32",
-                "${file}",
                 "-O0",
+                 "${file}",
                 "${workspaceFolder}/Source/Tics.cpp",
-                "${workspaceFolder}/Source/TaskSwitch.s",
+                "${workspaceFolder}/Source/Target/x86_32/Target.cpp",
+                "${workspaceFolder}/Source/Target/x86_32/Target.s",
                 "-o",
                 "${workspaceFolder}/Bin/${fileBasenameNoExtension}"
             ],
             "options": {"cwd": "${workspaceFolder}"},
             "problemMatcher": ["$gcc"],
-            "group": {"kind": "build", "isDefault": true}
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (x86_64 Linux Hosted)",
+            "command": "/usr/bin/g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-m64",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/x86_64/Target.cpp",
+                "${workspaceFolder}/Source/Target/x86_64/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (ARM Thumb-2 Cortex-M)",
+            "command": "arm-none-eabi-g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-mcpu=cortex-m4", 
+                "-mthumb",
+                "--specs=nosys.specs",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/ArmThumb/Target.cpp",
+                "${workspaceFolder}/Source/Target/ArmThumb/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (ARM Pure 32-bit A32)",
+            "command": "arm-none-eabi-g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-march=armv7-a",
+                "-marm",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Arm32/Target.cpp",
+                "${workspaceFolder}/Source/Target/Arm32/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (ARM Pure 64-bit AArch64)",
+            "command": "aarch64-none-elf-g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-march=armv8-a",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Arm64/Target.cpp",
+                "${workspaceFolder}/Source/Target/Arm64/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (RISC-V 32-bit RV32)",
+            "command": "riscv64-unknown-elf-g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-march=rv32imac",
+                "-mabi=ilp32",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Riscv32/Target.cpp",
+                "${workspaceFolder}/Source/Target/Riscv32/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "type": "cppbuild",
+            "label": "Build Tics (RISC-V 64-bit RV64)",
+            "command": "riscv64-unknown-elf-g++",
+            "args": [
+                "-I${workspaceFolder}/Source",
+                "-g",
+                "-march=rv64imac",
+                "-mabi=lp64",
+                "${file}",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Riscv64/Target.cpp",
+                "${workspaceFolder}/Source/Target/Riscv64/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf"
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "problemMatcher": ["$gcc"],
+            "group": {"kind": "build", "isDefault": false}
         }
     ]
 }

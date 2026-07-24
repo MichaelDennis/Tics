@@ -2,18 +2,44 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Tics (m32)",
+            "name": "Debug Tics (x86 Linux Hosted)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}",
-            "stopAtEntry": true,
+            "args": [],
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
             "MIMode": "gdb",
-            "preLaunchTask": "Build Tics to Bin (m32)",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "sourceFileMap": {
-                "/home/mdm/projects/Tics": "${workspaceFolder}"
-            }
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build Tics (x86 Linux Hosted)"
+        },
+        {
+            "name": "Debug Tics (x86_64 Linux Hosted)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build Tics (x86_64 Linux Hosted)"
         }
     ]
 }

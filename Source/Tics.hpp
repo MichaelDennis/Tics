@@ -37,11 +37,17 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdint.h>
+//MDM #include <cstddef> 
 
 //-----------------------------------------------------------------------------
-/// Externals
+// Typedefs
 //-----------------------------------------------------------------------------
-extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp);
+
+// The stack element type.
+typedef uintptr_t StackType;
+
+// The timer counter element type.
+typedef unsigned int TimerTickType;
 
 //-----------------------------------------------------------------------------
 /// Start TicsNameSpace.
@@ -51,14 +57,15 @@ extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp);
 namespace TicsNameSpace {
 
 //-----------------------------------------------------------------------------
-// Typedefs
+/// ASM Externals
 //-----------------------------------------------------------------------------
+extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp);
+extern "C" StackType GetStackPointer();
 
-// The stack element type.
-typedef unsigned int StackType;
-
-// The timer counter element type.
-typedef unsigned int TimerTickType;
+//-----------------------------------------------------------------------------
+/// C Externals
+//-----------------------------------------------------------------------------
+extern "C" TimerTickType GetSystemTickCount();
 
 //-----------------------------------------------------------------------------
 // Defines

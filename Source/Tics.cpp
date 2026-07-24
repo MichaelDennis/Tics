@@ -35,21 +35,17 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <time.h>
+//MDM #include <time.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include "Tics.hpp"
-#include "TicsTaskSwitch.hpp"
-#include <time.h>
 
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
 
 void TrampolineToErrorHandler();
-
 void TrampolineToNewTask();
-
 
 //-----------------------------------------------------------------------------
 // Start TicsNameSpace
@@ -166,55 +162,6 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
     MemSet(StackBottom, StackSizeInBytes, DefaultStackPadBytePattern);
 }
 
-//-----------------------------------------------------------------------------
-/// \brief Primes the task's stack so that it can resume execution.
-///
-/// Note that the first time
-//-----------------------------------------------------------------------------
-void StackClass::PrimeStack()
-{
-    // 1. Start at the absolute top of the allocated stack memory
-    StackType rawSp = (StackType) StackTop;
-
-    // 2. Force the starting address to a multiple of 16 (ends in 0x0)
-    rawSp &= SixteenByteBoundaryMask;
-
-    // 2.1 Save the adjusted StackTop as it is now a multiple of 16 per ABI rules.
-    StackTop = (StackType *) rawSp;
-
-    // Convert it back to your StackType pointer so pointer arithmetic works
-    StackType *sp = (StackType *) rawSp;
-
-    // 3. Alignment Padding (4 bytes)
-    // Pushing 8 items total (32 bytes) keeps the 16-byte boundary perfectly balanced.
-    *(--sp) = 0; 
-
-    // 4. Task Function Argument placeholder (4 bytes)
-    // You mentioned the task accepts no args, but standard cdecl expects 
-    // a slot here right above the return address.
-    *(--sp) = 0;
-
-    // 5. Push the ErrorHandler address. 
-    // If the task loop ends and hits a 'ret', it will pop this and jump to the handler.
-    *(--sp) = (StackType) TrampolineToErrorHandler; 
-
-    // 6. Push the actual starting STATIC function address.
-    // Replace '&TaskClass::StaticTaskRunner' with whatever your static wrapper is named.
-    *(--sp) = (StackType) TrampolineToNewTask;
-
-    // 7. Push fake preserved registers (4 registers = 16 bytes)
-    // These match the 4 'popl' instructions in TaskSwitch (%edi, %esi, %ebx, %ebp)
-    *(--sp) = 0; // Fake %ebp (0 terminates stack frame debug traces)
-    *(--sp) = 1; // Fake %ebx
-    *(--sp) = 2; // Fake %esi
-    *(--sp) = 3; // Fake %edi
-    
-    // Save the sp so it can be restored during a context switch.
-    SavedSp = sp;
-
-    // Return the perfectly aligned stack pointer for the assembly routine
-    return;
-}
 
 //-----------------------------------------------------------------------------
 /// \brief StackClass destructor. Deallocates stack memory.
@@ -235,7 +182,7 @@ void StackClass::Check(void)
     int unusedStackSizeInBytes;
 
     // Read the current CPU stack pointer.
-    GetStackPointer(currentSp);
+    currentSp = (StackType *) GetStackPointer();
 
     // Check if the stack pointer is within an allowable range.
     if (currentSp < StackBottom) {
@@ -933,61 +880,7 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 //-----------------------------------------------------------------------------
 TimerTickType ReadTickCount()
 {
-    // If we are in simulation mode, read the OS clock.
-    if (TicsFlags.IsSet(SimulationMode)) {
-        return ReadSimulatedTickCount();
-    }
-    else {
-        //Otherwise, return the hardware updated tick count which is controlled by the user.
-        return ReadRealTickCount();
-    }
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Read and return the 1 ms count from the Linux OS system clock.
-///
-/// \return The current system tick count reading.
-//-----------------------------------------------------------------------------
-TimerTickType ReadSimulatedTickCount()
-{
-    TimerTickType tickCount;
-
-    struct timespec ts;
-
-    // Get the current clock time info.
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-
-    // Convert to milliseconds.
-    uint64_t ms = (uint64_t)ts.tv_sec * 1000ULL +
-                  (uint64_t)ts.tv_nsec / 1000000ULL;
-
-    // Return lower 32 bits (wraps naturally every ~49.7 days)
-    tickCount = (TimerTickType) ms;
-
-    // Return the 32-bit clock tick count.
-    return tickCount;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Read and return the tick count from the hardware clock.
-///
-/// \return The current hardware clock count reading.
-//-----------------------------------------------------------------------------
-TimerTickType ReadRealTickCount()
-{
-    // TicsMsTimer is a Tics global that is incremented by the user every 1 ms.
-    return TicsMsTimer;
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Read and return the tick count from the hardware clock.
-///
-/// \return The current hardware clock count reading.
-//-----------------------------------------------------------------------------
-TimerTickType WriteRealTickCount(TimerTickType tickCount)
-{
-    // TicsMsTimer is a Tics global in shared RAM that is incremented by the user every 1 ms.
-    return TicsMsTimer == tickCount;
+    return GetSystemTickCount();
 }
 
 //-----------------------------------------------------------------------------
@@ -2597,15 +2490,30 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 //-----------------------------------------------------------------------------
 /// Helper Functions
 //-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+/// Trampoline Functions
+///
+/// A task is started by pushing its start address onto its stack, and popping
+/// it off the task when it is its turn to run. However, since each stack slot 
+/// can hold only one word, an address like MyTask.Task() will not fit, since 
+/// it is 2 words in size. To solve this problem, we prime the task's stack 
+/// with a C function instead, which is only one word, and call the MyTask.
+/// Task() from within the C function.
+//-----------------------------------------------------------------------------
+
 void TrampolineToErrorHandler()
 {
+    // Returning from a task is not allowed.
     ErrorHandler.Report(ErrorMsgAttemptToReturnFromATask);
 }
 
 void TrampolineToNewTask()
 {
+    // Update the current task to the task we are now starting.
     CurrentTask = NextTask;
 
+    // Start the new task.
     CurrentTask->Task();
 }
 
