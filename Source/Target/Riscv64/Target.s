@@ -63,4 +63,14 @@ GetStackPointer:
     addi a0, a0, 8
     ret
 
+.equ CLINT_MTIME, 0x02004ff8
+
+.global read_mtime_counter
+read_mtime_counter:
+    li   t0, CLINT_MTIME
+    ld   a0, 0(t0)            # Read raw 64-bit mtime counter
+                              # Units: 100 ns ticks (10 MHz clock frequency on QEMU virt)
+                              # 10,000 ticks = 1 ms
+    ret    
+
 .end

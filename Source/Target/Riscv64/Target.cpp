@@ -1,7 +1,9 @@
 /*
 RISC-V 64-bit (RV64)Under the 64-bit RISC-V calling convention, registers expand to a full 8 bytes (64 bits). Pointers and context-tracking indices grow to match the expanded bus width. We swap out the 32-bit word assembly instructions (sw/lw) for the native 64-bit double-word instructions (sd/ld) to cleanly preserve the 14 core registers.1. The Cross-Compiler Command LineTo compile and link your decoupled framework for a RISC-V 64-bit target using the terminal, run this command:
 
-riscv64-unknown-elf-g++ -I./Source -g -march=rv64imac -mabi=lp64 -O0 ./Source/Tics.cpp ./Source/Target/Riscv64/Target.cpp ./Source/Target/Riscv64/Target.s ./Examples/Hello.cpp -o ./Bin/Hello_Riscv64.elf
+New cmd from 7/26/2026
+
+riscv64-unknown-elf-g++ --specs=picolibc.specs -mcmodel=medany -I/home/mdm/projects/Tics/Source -g -march=rv64gc -mabi=lp64 -fno-exceptions -fno-rtti /home/mdm/projects/Tics/Source/Target/Riscv64/Main.cpp -O0 /home/mdm/projects/Tics/Source/Tics.cpp /home/mdm/projects/Tics/Source/Target/Riscv64/Target.cpp /home/mdm/projects/Tics/Source/Target/Riscv64/Target.s -o /home/mdm/projects/Tics/Bin/Main.elf
 
 */
 #include "Tics.hpp" 

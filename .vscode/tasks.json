@@ -10,7 +10,7 @@
                 "-g",
                 "-m32",
                 "-O0",
-                 "${file}",
+                "${file}",
                 "${workspaceFolder}/Source/Tics.cpp",
                 "${workspaceFolder}/Source/Target/x86_32/Target.cpp",
                 "${workspaceFolder}/Source/Target/x86_32/Target.s",
@@ -113,6 +113,8 @@
                 "-g",
                 "-march=rv32imac",
                 "-mabi=ilp32",
+                "-ffreestanding",
+                "-nostdlib",
                 "${file}",
                 "-O0",
                 "${workspaceFolder}/Source/Tics.cpp",
@@ -145,6 +147,65 @@
             "options": {"cwd": "${workspaceFolder}"},
             "problemMatcher": ["$gcc"],
             "group": {"kind": "build", "isDefault": false}
+        },
+        {
+            "label": "Build and Run QEMU (RISC-V 32-bit)",
+            "type": "shell",
+            "command": "qemu-system-riscv32 -machine virt -nographic -bios none -kernel ${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf -s -S",
+            "isBackground": true,
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build Tics (RISC-V 32-bit RV32)"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            }
+        },
+
+        // New as of 7/26/2026 Part 1 of 2
+        {
+            "label": "Build Tics 32-Bit",
+            "type": "shell",
+            "command": "riscv64-unknown-elf-g++",
+            "args": [
+                "-fno-exceptions",
+                "--specs=picolibc.specs",
+                "-I${workspaceFolder}/Source",
+                "-ggdb3",
+                "-march=rv32imac",
+                "-mabi=ilp32",
+                "${workspaceFolder}/Source/Target/Riscv32/Main.cpp",
+                "-O0",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Riscv32/Target.cpp",
+                "${workspaceFolder}/Source/Target/Riscv32/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/Main.elf"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+       // New as of 7/26/2026 Part 2 of 2
+        {
+            "label": "Start QEMU Debug Server",
+            "type": "shell",
+            "isBackground": true,
+            "command": "qemu-system-riscv32",
+            "args": [
+                "-machine", "virt",
+                "-cpu", "rv32",
+                "-smp", "1",
+                "-m", "128M",
+                "-bios", "none",
+                "-kernel", "${workspaceFolder}/Bin/Main.elf",
+                "-display", "none",
+                "-s", "-S"
+            ],
+            "dependsOn": "Build Tics 32-Bit",
+            "problemMatcher": []
         }
     ]
 }
