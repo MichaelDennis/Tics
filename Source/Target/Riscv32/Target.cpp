@@ -3,6 +3,20 @@
 
  Hello World compile line 64 bit execute in Tics folder: riscv64-unknown-elf-g++ -specs=picolibc.specs Sandbox/hello.cpp -o Sandbox/hello_64.elf
 
+ Build: riscv64-unknown-elf-g++ -march=rv32imac -mabi=ilp32 -g -O0 --specs=picolibc.specs --oslib=semihost -I./Source ./Source/Target/Riscv32/Target.s ./Source/Target/Riscv32/Target.cpp ./Source/Tics.cpp ./Source/Target/Riscv32/Main.cpp -o ./Bin/Main.elf
+
+ QEMU: qemu-system-riscv32 -machine virt -cpu rv32 -smp 1 -m 128M -bios none -kernel ./Bin/Main.elf -display none -s -S &clear
+
+Terminate: killall qemu-system-riscv32
+
+Do this to run:
+
+0. Terminate tasks (see above)
+1. Debug and Run panel select drop down value of: Connect GDB to QEMU (Tics)
+2. Open Target/Riscv32/Main.cpp
+3. Run QEMU (see above)
+3. Press F5
+
 */
 #include "Tics.hpp" 
 #include <stdlib.h>

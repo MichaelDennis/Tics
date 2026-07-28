@@ -2,105 +2,15 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Tics (x86 Linux Hosted)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Build Tics (x86 Linux Hosted)"
-        },
-        {
-            "name": "Debug Tics (x86_64 Linux Hosted)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Build Tics (x86_64 Linux Hosted)"
-        },
-        {
-            "name": "Debug Tics (RISC-V 32-bit RV32)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Bin/${fileBasenameNoExtension}.elf",
-            "args": [],
-            "stopAtEntry": true,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "miDebuggerPath": "riscv64-unknown-elf-gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "text": "target remote localhost:1234"
-                }
-            ],
-            "preLaunchTask": "Build and Run QEMU (RISC-V 32-bit)"
-        },
-        // New as of 7/26/2026
-        {
             "name": "Connect GDB to QEMU",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/Main.elf",
             "MIMode": "gdb",
-            "miDebuggerPath": "riscv64-unknown-elf-gdb",
+            "miDebuggerPath": "gdb-multiarch",
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}",
-            "setupCommands": [
-                {
-                    "description": "Set architecture to RISC-V 32-bit",
-                    "text": "set architecture riscv:rv32",
-                    "ignoreFailures": false
-                },
-                {
-                    "description": "Force immediate connection to QEMU",
-                    "text": "target remote 127.0.0.1:1234",
-                    "ignoreFailures": false
-                },
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Build Tics 32-Bit"
-        }
-    ],
-    "compounds": [
-        {
-            "name": "Debug Tics (Automated F5)",
-            "configurations": [
-                "Connect GDB to QEMU"
-            ]
+             "stopAtEntry": true
         }
     ]
 }
