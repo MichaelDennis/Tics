@@ -227,6 +227,7 @@ void TaskListClass::Add(TaskClass *task)
 void TaskClass::Suspend(void)
 {
     MsgClass *msg;
+    static volatile bool thisIsTheFirstTask = true;
 
     // Delete msgs that have already been processed by tasks. 
     if (DeleteList.IsNotEmpty()) {
@@ -277,7 +278,12 @@ void TaskClass::Suspend(void)
         NextTask = &IdleTask;
     }
 
-    // Call the assmeblylanguage task switcher.
+    // If this is the first time we've ever started a task, then we need to prime its stack.
+    if (thisIsTheFirstTask) {
+        NextTask->Stack.PrimeStack();
+        thisIsTheFirstTask = false;
+    }
+    // Call the assembly language task switcher.
     TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp);
 }
 

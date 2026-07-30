@@ -21,15 +21,40 @@ Do this to run:
 #include "Tics.hpp" 
 #include <stdlib.h>
 
-#define RV32_CLINT_MTIME_ADDR (*(volatile uint64_t*)0x02004000)
+#define RV32_CLINT_MTIME_ADDR (*(volatile uint32_t*)0x0200BFF8)
 
 extern "C" void TrampolineToErrorHandler();
 extern "C" void TrampolineToNewTask();
 
 namespace TicsNameSpace {
 
+static uint32_t lastRawHardwareTicks = 0;
+static uint32_t subMsTicksBucket = 0;
+static uint32_t freeRunningMsCounter = 0;
+
 TimerTickType GetSystemTickCount() {
-    return (TimerTickType) RV32_CLINT_MTIME_ADDR;
+    // 1. Grab the absolute, ever-growing 10MHz hardware clock
+    uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
+
+    // Test counter.
+    unsigned int counter = 0;
+
+    // 2. Find the tiny slice of raw ticks that passed since the last poll
+    uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
+    lastRawHardwareTicks = currentRawHardwareTicks;
+
+    // 3. Drop them into our sub-millisecond remainder bucket
+    subMsTicksBucket += elapsedTicks;
+
+    // 4. Drain the bucket completely to catch every single millisecond
+    while (subMsTicksBucket >= 10000) {
+        freeRunningMsCounter++;
+        subMsTicksBucket -= 10000;
+        counter++;
+    }
+
+    // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
+    return (TimerTickType)freeRunningMsCounter;
 }
 
 void StackClass::PrimeStack() {
@@ -57,5 +82,83 @@ void StackClass::PrimeStack() {
     SavedSp = sp;
     return;
 }
+
+/*
+
+#include <stdint.h>
+
+class HardwareTimer {
+private:
+    // Member variables - no static keywords, clean encapsulation
+    uint32_t lastRawHardwareTicks;
+    uint32_t subMsTicksBucket;
+    uint32_t freeRunningMsCounter;
+
+public:
+    // Constructor using a clean initialization list
+    HardwareTimer() 
+        : lastRawHardwareTicks(0)
+        , subMsTicksBucket(0)
+        , freeRunningMsCounter(0)
+    {
+        // Calibrate the clock immediately on power-on/construction
+        lastRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
+    }
+
+    // Main polling interface method
+    TimerTickType GetSystemTickCount() {
+        // 1. Grab the absolute, ever-growing 10MHz hardware clock
+        uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
+
+        // 2. Find the tiny slice of raw ticks that passed since the last poll
+        uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
+        lastRawHardwareTicks = currentRawHardwareTicks;
+
+        // 3. Drop them into our sub-millisecond remainder bucket
+        subMsTicksBucket += elapsedTicks;
+
+        // 4. Drain the bucket completely to catch every single millisecond
+        while (subMsTicksBucket >= 10000) {
+            freeRunningMsCounter++;
+            subMsTicksBucket -= 10000;
+        }
+
+        // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
+        return (TimerTickType)freeRunningMsCounter;
+    }
+};
+
+
+*/
+
+/*
+
+static uint32_t lastRawHardwareTicks = 0;
+static uint32_t subMsTicksBucket = 0;
+static uint32_t freeRunningMsCounter = 0;
+
+TimerTickType GetSystemTickCount() {
+    // 1. Grab the absolute, ever-growing 10MHz hardware clock
+    uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
+
+    // 2. Find the tiny slice of raw ticks that passed since the last poll
+    uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
+    lastRawHardwareTicks = currentRawHardwareTicks;
+
+    // 3. Drop them into our sub-millisecond remainder bucket
+    subMsTicksBucket += elapsedTicks;
+
+    // 4. Drain the bucket completely to catch every single millisecond
+    while (subMsTicksBucket >= 10000) {
+        freeRunningMsCounter++;
+        subMsTicksBucket -= 10000;
+    }
+
+    // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
+    return (TimerTickType)freeRunningMsCounter;
+}
+
+
+*/
 
 } // namespace TicsNameSpace

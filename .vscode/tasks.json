@@ -8,6 +8,7 @@
             "args": [
                 "-fno-exceptions",
                 "--specs=picolibc.specs",
+                "--oslib=semihost",
                 "-I./Source",
                 "-ggdb3",
                 "-march=rv32imac",
@@ -19,7 +20,12 @@
                 "./Source/Target/Riscv32/Target.s",
                 "-o",
                 "./Bin/Main.elf"
-            ]
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
         }
     ]
 }

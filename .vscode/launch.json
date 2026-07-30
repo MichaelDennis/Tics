@@ -10,7 +10,7 @@
             "miDebuggerPath": "gdb-multiarch",
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}",
-             "stopAtEntry": true
+            "stopAtEntry": true
         }
     ]
 }
