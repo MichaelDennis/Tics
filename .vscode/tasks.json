@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Tics 32-Bit",
+            "label": "Build Tics and Boot QEMU",
             "type": "shell",
             "command": "riscv64-unknown-elf-g++",
             "args": [
@@ -13,13 +13,14 @@
                 "-ggdb3",
                 "-march=rv32imac",
                 "-mabi=ilp32",
-                "./Source/Target/Riscv32/Main.cpp",
+                "${file}",
                 "-O0",
                 "./Source/Tics.cpp",
-                "./Source/Target/Riscv32/Target.cpp",
-                "./Source/Target/Riscv32/Target.s",
+                "./Source/Target/${config:tics.targetPlatform}/Target.cpp",
+                "./Source/Target/${config:tics.targetPlatform}/Target.s",
                 "-o",
-                "./Bin/Main.elf"
+                "./Bin/Main.elf",
+                "&&", "echo", "go", ">", "./Bin/qemu_trigger"
             ],
             "group": {
                 "kind": "build",
