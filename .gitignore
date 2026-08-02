@@ -1,19 +1,10 @@
 # --- Build Artifacts (The "Noise") ---
 
-#Ignore the Sandbox folder
+# Ignore the Sandbox folder
 Sandbox/
 
-# Ignore the entire bin folder and common binary extensions
+# Ignore the entire bin folder completely
 Bin/
-*.o
-*.obj
-*.exe
-*.out
-*.app
-*.so
-*.dylib
-*.dll
-*.d
 
 # --- IDE Configuration (The "Signal") ---
 # 1. Ignore EVERYTHING inside .vscode by default

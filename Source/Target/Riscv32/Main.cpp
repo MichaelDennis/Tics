@@ -141,6 +141,7 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
+
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.
