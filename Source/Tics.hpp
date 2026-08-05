@@ -791,6 +791,9 @@ public:
     // The task's msg list. Msgs sent to this task are placed into the MsgList.
     MsgListClass MsgList;
 
+    // Tells whether or not this is the first time this task is being switched to.
+    bool FirstContextSwitch = true;
+
     // Functions
     
     // Constructor

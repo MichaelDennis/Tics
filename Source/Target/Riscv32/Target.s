@@ -7,16 +7,9 @@
 .type TaskSwitch, %function
 .type GetStackPointer, %function
 
-# -----------------------------------------------------------------------------
-# 1. Context Switcher
-# -----------------------------------------------------------------------------
 TaskSwitch:
-    # RISC-V ABI Calling Convention:
-    # a0 = oldSp pointer (uintptr_t*)
-    # a1 = newSp value (uintptr_t)
-
-    # 1. Save Current Task Context
-    addi sp, sp, -56    # Allocate space for 14 registers (14 * 4 bytes)
+    # 1. Save Current Task Context (56 is perfectly divisible by 16)
+    addi sp, sp, -56    
     sw ra,  0(sp)
     sw s0,  4(sp)
     sw s1,  8(sp)
@@ -29,11 +22,11 @@ TaskSwitch:
     sw s8,  36(sp)
     sw s9,  40(sp)
     sw s10, 44(sp)
-    sw s11, 48(sp)
+    sw s11, 48(sp)      # Leaves bytes 52-55 as empty alignment padding
 
     # 2. Save Old SP and Load New SP
-    sw sp, 0(a0)        # Store current Stack Pointer into *oldSp
-    mv sp, a1           # Load new task's SP into our Stack Pointer register
+    sw sp, 0(a0)        
+    mv sp, a1           
 
     # 3. Restore New Task Context & Resume Task
     lw ra,  0(sp)
@@ -49,18 +42,15 @@ TaskSwitch:
     lw s9,  40(sp)
     lw s10, 44(sp)
     lw s11, 48(sp)
-    addi sp, sp, 56     # Free the stack frame
+    addi sp, sp, 56     # Free the aligned frame
     ret
 
 # -----------------------------------------------------------------------------
-# 2. Stack Pointer Utility (Compensates for 4-byte Return Address)
+# 2. Stack Pointer Utility (Returns the current hardware SP)
 # -----------------------------------------------------------------------------
 GetStackPointer:
-    # 1. Copy the current SP to a0 (the designated return register)
+    # Copy the true, unaltered hardware SP straight to the return register
     mv a0, sp
-    
-    # 2. Add 4 bytes to offset the return address pushed to the stack by the call
-    addi a0, a0, 4
     ret
 
 

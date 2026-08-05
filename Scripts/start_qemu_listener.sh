@@ -4,11 +4,20 @@
 # Navigate to the explicit project root workspace directory
 cd ~/projects/Tics
 
+# Ensure the Bin directory exists
+mkdir -p ./Bin
+
+# AUTOMATION HOOK: If the named pipe does not exist, create it automatically
+if [ ! -p ./Bin/qemu_trigger ]; then
+    echo "Creating named pipe at ./Bin/qemu_trigger..."
+    mkfifo ./Bin/qemu_trigger
+fi
+
 echo "Tics QEMU Background Engine initialized. Waiting for trigger..."
 
 # Infinite loop listening for compilation handshakes
 while true; do
-    # Halt and block until data enters the FIFO pipe (0% CPU consumption)
+    # Halt and block until data enters the FIFO pipe
     read line < ~/projects/Tics/Bin/qemu_trigger
     
     # Perform a clean sweep: obliterate any stale emulator instances safely

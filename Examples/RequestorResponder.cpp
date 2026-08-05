@@ -36,7 +36,6 @@ SOFTWARE.
 */
 
 #include "Tics.hpp"
-#include "TicsTaskSwitch.hpp"
 #include <iostream>
 
 //-----------------------------------------------------------------------------

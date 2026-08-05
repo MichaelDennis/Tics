@@ -10,7 +10,8 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
-#include <iostream>
+//MDM#include <iostream>
+#include <stdio.h>
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -110,8 +111,9 @@ void TaskBClass::Task()
         msg = (CustomMsgClass *) Wait(HelloMsg);
 
         // Print out the data we received.
-        cout << endl << "TaskB received x,y,z data of (" 
-            << msg->X << ", " << msg->Y << ", " << msg->Z << ")." << endl;
+        //MDM cout << endl << "TaskB received x,y,z data of (" 
+        //MDM    << msg->X << ", " << msg->Y << ", " << msg->Z << ")." << endl;
+        printf("Hello... ");
 
         // Reply back to the sender.
         Reply(msg, HelloMsg);

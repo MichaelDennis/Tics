@@ -32,8 +32,8 @@ SOFTWARE.
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
-//MDM #include <iostream>
-#include <stdio.h>
+#include <iostream>
+//MDM #include <stdio.h>
 
 //-----------------------------------------------------------------------------
 /// Namespaces - std
@@ -126,8 +126,8 @@ void HelloTaskClass::Task(void)
     while (true) {
 
         // Output the string "Hello World!World.cpp" followed by a counter value.
-        //MDM cout << "Hello World! " << i++ << endl;
-        printf("Hello world %d ", i++);
+        cout << "Hello World! " << i++ << endl;
+        //MDM printf("Hello world %d ", i++);
 
         // Sleep for one second.
         Pause(1000);

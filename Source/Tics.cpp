@@ -188,7 +188,10 @@ void StackClass::Check(void)
     if (currentSp < StackBottom) {
         ErrorHandler.Report(ErrorCurrentSpIsBelowStackBottom);
     }
-    else if (currentSp > StackTop) {
+    // Note: Initially the Sp is set to StackTop + 1, which is a valid value
+    // because the first valid stack operation will be a push, which means the
+    // the first value written tto the stack will be written to StackTop.
+    else if (currentSp > (StackTop + 1)) {
         ErrorHandler.Report(ErrorCurrentSpIsAboveStackTop);
     }
 
@@ -227,7 +230,6 @@ void TaskListClass::Add(TaskClass *task)
 void TaskClass::Suspend(void)
 {
     MsgClass *msg;
-    static volatile bool thisIsTheFirstTask = true;
 
     // Delete msgs that have already been processed by tasks. 
     if (DeleteList.IsNotEmpty()) {
@@ -278,13 +280,16 @@ void TaskClass::Suspend(void)
         NextTask = &IdleTask;
     }
 
-    // If this is the first time we've ever started a task, then we need to prime its stack.
-    if (thisIsTheFirstTask) {
-        NextTask->Stack.PrimeStack();
-        thisIsTheFirstTask = false;
-    }
     // Call the assembly language task switcher.
     TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp);
+
+    // We are now on the NextTask's stack. So, update the CurrenTask's pointer.
+    CurrentTask = NextTask;
+
+    // Check the CurrentTask's stack.
+    CurrentTask->Stack.Check();
+
+    // Now we will return to the new task (CurrentTask).
 }
 
 //-----------------------------------------------------------------------------
@@ -1588,7 +1593,7 @@ bool TaskClass::TaskExists(TaskClass *receiver)
 //-----------------------------------------------------------------------------
  StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags) : TaskClass(name, priority, flags)
  {
-    // This is a dummy tsk used for startup. We just need the task object. We don't
+    // This is a dummy task used for startup. We just need the task object. We don't
     // Want to run it.
     ClrFlag(ScheduleTaskOnCreationFlag);
  };
@@ -2518,6 +2523,9 @@ void TrampolineToNewTask()
 {
     // Update the current task to the task we are now starting.
     CurrentTask = NextTask;
+
+    // Check the stack for overflow, etc.
+    CurrentTask->Stack.Check();
 
     // Start the new task.
     CurrentTask->Task();

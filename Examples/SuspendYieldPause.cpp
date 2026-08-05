@@ -39,6 +39,7 @@ using namespace std;
 class TaskAClass : public TaskClass {
 public:
     // Functions
+    TaskAClass(const char *name = 0) : TaskClass(name) {}
     void Task();
 };
 
@@ -48,6 +49,7 @@ public:
 class TaskBClass : public TaskClass {
 public:
     // Functions
+    TaskBClass(const char *name = 0) : TaskClass(name) {}
     void Task();
 };
 
@@ -63,6 +65,7 @@ TaskBClass * TaskB;
 void TaskAClass::Task()
 {
     while (true) {
+
         // Wait for a request to wake up TaskB.
         Wait(RqstMsg);
 
@@ -95,6 +98,7 @@ void TaskBClass::Task()
         // Yield() lets other tasks run, after which this task will resume.
         // (That's assuming all tasks and msgs are at the same priority.)
         // Yield() is equivalent to Pause(0).
+    
         Yield();
 
         // Pause(m) lets other tasks run until "m" clock ticks are up, after
@@ -125,8 +129,8 @@ void TaskBClass::Task()
 int main()
 {
     // Instantiate the tasks.
-    TaskA = new TaskAClass();
-    TaskB = new TaskBClass();
+    TaskA = new TaskAClass("TaskA");
+    TaskB = new TaskBClass("TaskB");
 
     // Start tasking.
     Suspend();
