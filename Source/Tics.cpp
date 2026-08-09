@@ -35,9 +35,9 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-//MDM #include <time.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "Tics.hpp"
 
 //-----------------------------------------------------------------------------
@@ -112,6 +112,98 @@ namespace TicsNameSpace {
  
     // All errors are handled by calling ErrorHandler.Report().
     ErrorHandlerClass ErrorHandler;
+
+//-----------------------------------------------------------------------------
+//  TaskSwitch Debuggind Code
+//-----------------------------------------------------------------------------
+
+bool PrintTaskSwitchDump = false;
+
+struct SavedContextRegs {
+    uint32_t ra;
+    uint32_t s0;  uint32_t s1;  uint32_t s2;  uint32_t s3;
+    uint32_t s4;  uint32_t s5;  uint32_t s6;  uint32_t s7;
+    uint32_t s8;  uint32_t s9;  uint32_t s10; uint32_t s11;
+    uint32_t sp; // Track the stack pointer location separately
+};
+
+void PrintContextBefore(const char* currentName, const char* nextName, const SavedContextRegs& regs);
+void PrintContextAfter(const char* resumedName, const SavedContextRegs& regs);
+
+void PrintContextBefore(const char* currentName, const char* nextName, const SavedContextRegs& regs) {
+    printf("\n==================================================\n");
+    printf("[TICS TRACE] CONTEXT SWITCH STARTED\n");
+    printf("Leaving Task : %s\n", currentName ? currentName : "Unknown");
+    printf("Target Task  : %s\n", nextName ? nextName : "Unknown");
+    printf("--------------------------------------------------\n");
+    printf("Hardware SP Before Frame Subtraction: 0x%08X\n", regs.sp);
+    printf("Saved Registers (About to be pushed):\n");
+    printf("  ra : 0x%08X    s0 : 0x%08X    s1 : 0x%08X\n", regs.ra, regs.s0, regs.s1);
+    printf("  s2 : 0x%08X    s3 : 0x%08X    s4 : 0x%08X\n", regs.s2, regs.s3, regs.s4);
+    printf("  s5 : 0x%08X    s6 : 0x%08X    s7 : 0x%08X\n", regs.s5, regs.s6, regs.s7);
+    printf("  s8 : 0x%08X    s9 : 0x%08X    s10: 0x%08X    s11: 0x%08X\n", regs.s8, regs.s9, regs.s10, regs.s11);
+    
+    // 13 registers * 4 bytes = 52 bytes used for data.
+    // The assembly drops sp by 56 bytes due to 16-byte alignment boundaries.
+    uint32_t* potentialFrame = (uint32_t*)(regs.sp - 56);
+    printf("--------------------------------------------------\n");
+    printf("Preview of Target Stack Frame Memory (13 saved words):\n");
+    for (int i = 0; i < 13; i++) {
+        printf("  Offset %2d(sp): 0x%08X\n", i * 4, potentialFrame[i]);
+    }
+    printf("==================================================\n");
+}
+
+void PrintContextAfter(const char* resumedName, const SavedContextRegs& regs) {
+    printf("\n==================================================\n");
+    printf("[TICS TRACE] CONTEXT SWITCH COMPLETED\n");
+    printf("Resumed Task : %s\n", resumedName ? resumedName : "Unknown");
+    printf("--------------------------------------------------\n");
+    printf("Hardware SP After Frame Addition: 0x%08X\n", regs.sp);
+    printf("Restored Registers (Just popped):\n");
+    printf("  ra : 0x%08X    s0 : 0x%08X    s1 : 0x%08X\n", regs.ra, regs.s0, regs.s1);
+    printf("  s2 : 0x%08X    s3 : 0x%08X    s4 : 0x%08X\n", regs.s2, regs.s3, regs.s4);
+    printf("  s5 : 0x%08X    s6 : 0x%08X    s7 : 0x%08X\n", regs.s5, regs.s6, regs.s7);
+    printf("  s8 : 0x%08X    s9 : 0x%08X    s10: 0x%08X    s11: 0x%08X\n", regs.s8, regs.s9, regs.s10, regs.s11);
+    
+    uint32_t* dynamicFrame = (uint32_t*)(regs.sp - 56);
+    printf("--------------------------------------------------\n");
+    printf("Historical Stack Frame Memory values (13 popped words):\n");
+    for (int i = 0; i < 13; i++) {
+        printf("  Offset %2d(sp): 0x%08X\n", i * 4, dynamicFrame[i]);
+    }
+    printf("==================================================\n\n");
+}
+
+#include <cstdio>
+
+extern "C" void ForensicallyDumpStackBeforeRet(uint32_t* currentSp) {
+    // Note: If you haven't integrated the IsTraceEnabled flag into your system yet,
+    // you can safely comment out this 'if' statement line so it always prints.
+    if (PrintTaskSwitchDump) {
+        printf("\n==================================================\n");
+        printf("[TICS ASSEMBLY TRACE] CRITICAL DISCOVERY\n");
+        printf("Hardware SP Right Before Assembly RET: 0x%08X\n", (uint32_t)currentSp);
+        printf("--------------------------------------------------\n");
+        printf("Popped Register Values Sitting on Active Stack Frame:\n");
+        
+        // This explicitly reads the actual values stored inside the 13 memory slots
+        printf("  [0(sp)  -> ra ] : 0x%08X\n", currentSp[0]);
+        printf("  [4(sp)  -> s0 ] : 0x%08X\n", currentSp[1]);
+        printf("  [8(sp)  -> s1 ] : 0x%08X\n", currentSp[2]);
+        printf("  [12(sp) -> s2 ] : 0x%08X\n", currentSp[3]);
+        printf("  [16(sp) -> s3 ] : 0x%08X\n", currentSp[4]);
+        printf("  [20(sp) -> s4 ] : 0x%08X\n", currentSp[5]);
+        printf("  [24(sp) -> s5 ] : 0x%08X\n", currentSp[6]);
+        printf("  [28(sp) -> s6 ] : 0x%08X\n", currentSp[7]);
+        printf("  [32(sp) -> s7 ] : 0x%08X\n", currentSp[8]);
+        printf("  [36(sp) -> s8 ] : 0x%08X\n", currentSp[9]);
+        printf("  [40(sp) -> s9 ] : 0x%08X\n", currentSp[10]);
+        printf("  [44(sp) -> s10] : 0x%08X\n", currentSp[11]);
+        printf("  [48(sp) -> s11] : 0x%08X\n", currentSp[12]);
+        printf("==================================================\n\n");
+    }
+}
 
 //-----------------------------------------------------------------------------
 /// \brief StackClass constructor. Allocates stack space and defines the stack protective pad.
@@ -280,14 +372,76 @@ void TaskClass::Suspend(void)
         NextTask = &IdleTask;
     }
 
-    // Call the assembly language task switcher.
-    TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp);
+// =========================================================================
+    // DIAGNOSTIC HOOK: BEFORE TASK SWITCH
+    // =========================================================================
+    SavedContextRegs regsBefore;
+    asm volatile (
+        "mv %0, ra\n" "mv %1, s0\n" "mv %2, s1\n" "mv %3, s2\n"
+        "mv %4, s3\n" "mv %5, s4\n" "mv %6, s5\n" "mv %7, s6\n"
+        "mv %8, s7\n" "mv %9, s8\n" "mv %10, s9\n" "mv %11, s10\n"
+        "mv %12, s11\n" "mv %13, sp\n"
+        : "=r"(regsBefore.ra),  "=r"(regsBefore.s0),  "=r"(regsBefore.s1),  "=r"(regsBefore.s2),
+          "=r"(regsBefore.s3),  "=r"(regsBefore.s4),  "=r"(regsBefore.s5),  "=r"(regsBefore.s6),
+          "=r"(regsBefore.s7),  "=r"(regsBefore.s8),  "=r"(regsBefore.s9),  "=r"(regsBefore.s10),
+          "=r"(regsBefore.s11), "=r"(regsBefore.sp)
+        : : "memory"
+    );
+    
+
+    // Conditionally call the assembly language task switcher.
+    if (PrintTaskSwitchDump) {
+            // Print the snapshot data along with the task names
+    PrintContextBefore(CurrentTask->Name, NextTask->Name, regsBefore);
+    }
+  
+    // Debug probe.
+if (PrintTaskSwitchDump) {
+    printf("\n--- [TICS MEMORY CHECK] ---\n");
+    // Added Name strings right alongside your existing object addresses
+    printf("CurrentTask Object Addr : 0x%08X (Name: %s)\n", 
+           (uint32_t)CurrentTask, 
+           CurrentTask && CurrentTask->Name ? CurrentTask->Name : "NULL");
+           
+    printf("NextTask Object Addr    : 0x%08X (Name: %s)\n", 
+           (uint32_t)NextTask, 
+           NextTask && NextTask->Name ? NextTask->Name : "NULL");
+           
+    printf("CurrentTask->SavedSp Val: 0x%08X\n", (uint32_t)CurrentTask->Stack.SavedSp);
+    printf("NextTask->SavedSp Val   : 0x%08X\n", (uint32_t)NextTask->Stack.SavedSp);
+    printf("Address of SavedSp Field: 0x%08X\n", (uint32_t)&CurrentTask->Stack.SavedSp);
+    printf("---------------------------\n\n");
+}
+    // Switch to NextTask.
+    TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp,
+    CurrentTask, NextTask);       
+  
+ // =========================================================================
+    // DIAGNOSTIC HOOK: AFTER TASK SWITCH (We wake up on the new task stack right here!)
+    // =========================================================================
+    SavedContextRegs regsAfter;
+    asm volatile (
+        "mv %0, ra\n" "mv %1, s0\n" "mv %2, s1\n" "mv %3, s2\n"
+        "mv %4, s3\n" "mv %5, s4\n" "mv %6, s5\n" "mv %7, s6\n"
+        "mv %8, s7\n" "mv %9, s8\n" "mv %10, s9\n" "mv %11, s10\n"
+        "mv %12, s11\n" "mv %13, sp\n"
+        : "=r"(regsAfter.ra),  "=r"(regsAfter.s0),  "=r"(regsAfter.s1),  "=r"(regsAfter.s2),
+          "=r"(regsAfter.s3),  "=r"(regsAfter.s4),  "=r"(regsAfter.s5),  "=r"(regsAfter.s6),
+          "=r"(regsAfter.s7),  "=r"(regsAfter.s8),  "=r"(regsAfter.s9),  "=r"(regsAfter.s10),
+          "=r"(regsAfter.s11), "=r"(regsAfter.sp)
+        : : "memory"
+    );
+
+    // Print the newly restored properties. 
+    // Note: We use NextTask->Name here because CurrentTask hasn't been updated yet!
+    //MDM PrintContextAfter(NextTask->Name, regsAfter);
+    // =========================================================================
 
     // We are now on the NextTask's stack. So, update the CurrenTask's pointer.
     CurrentTask = NextTask;
 
     // Check the CurrentTask's stack.
-    CurrentTask->Stack.Check();
+    //MDM CurrentTask->Stack.Check();
 
     // Now we will return to the new task (CurrentTask).
 }
@@ -2529,6 +2683,15 @@ void TrampolineToNewTask()
 
     // Start the new task.
     CurrentTask->Task();
+}
+
+//-----------------------------------------------------------------------------
+/// DumpStackData - Stack debugging aid function
+//-----------------------------------------------------------------------------
+void DumpStackData()
+{
+    // Print out where we are.
+    //cout << "Entering the TaskSwitch function."
 }
 
 //-----------------------------------------------------------------------------

@@ -39,7 +39,6 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 #include <stdlib.h>
 #include <stdint.h>
-//MDM #include <cstddef> 
 
 //-----------------------------------------------------------------------------
 // Typedefs
@@ -61,7 +60,8 @@ namespace TicsNameSpace {
 //-----------------------------------------------------------------------------
 /// ASM Externals
 //-----------------------------------------------------------------------------
-extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp);
+extern "C" void TaskSwitch(void** currentTaskSavedSp, void* newTaskSavedSp,
+void *currentTask, void *nextTask);
 extern "C" StackType GetStackPointer();
 
 //-----------------------------------------------------------------------------
@@ -614,7 +614,7 @@ public:
     enum StackClassEnum {
 
         // Default stack size.
-        DefaultStackSizeInBytes = (1024 * 4),
+        DefaultStackSizeInBytes = (1024 * 8),
 
         // The pad is a warning area at the end of stack memory. 
         DefaultStackPadSizeInBytes = 128,
@@ -976,6 +976,8 @@ public:
         // Clear the indicated bits.
         Flags.Clr(mask); 
     }
+    // DUmp stack data debugging aid.
+    void DumpStackData(void);
 };
 
 

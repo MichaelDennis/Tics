@@ -1,5 +1,6 @@
 {
     "editor.stickyScroll.enabled": false,
     "workbench.editor.stickyScroll.enabled": false,
-    "tics.targetPlatform": "Riscv32"
+    "tics.targetPlatform": "Riscv32",
+    "window.titleBarStyle": "native"
 }

@@ -130,7 +130,8 @@ void HelloTaskClass::Task(void)
         printf("Hello... ");
 
         // Sleep for one second.
-        Pause(1000);
+       //MDM Pause(1000);
+       Yield();
 
     }
 }

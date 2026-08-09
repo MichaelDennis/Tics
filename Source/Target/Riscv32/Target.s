@@ -7,43 +7,98 @@
 .type TaskSwitch, %function
 .type GetStackPointer, %function
 
+# =============================================================================
+# Tics Realtime Operating System - RISC-V 32-bit (RV32) Context Core
+# =============================================================================
+
+.global TaskSwitch
+.global GetStackPointer
+.type TaskSwitch, %function
+.type GetStackPointer, %function
+
 TaskSwitch:
-    # 1. Save Current Task Context (56 is perfectly divisible by 16)
-    addi sp, sp, -56    
-    sw ra,  0(sp)
-    sw s0,  4(sp)
-    sw s1,  8(sp)
-    sw s2,  12(sp)
-    sw s3,  16(sp)
-    sw s4,  20(sp)
-    sw s5,  24(sp)
-    sw s6,  28(sp)
-    sw s7,  32(sp)
-    sw s8,  36(sp)
-    sw s9,  40(sp)
-    sw s10, 44(sp)
-    sw s11, 48(sp)      # Leaves bytes 52-55 as empty alignment padding
+    # -------------------------------------------------------------------------
+    # 1. PUSH CONTEXT (Pure sequential pushes)
+    # -------------------------------------------------------------------------
+    addi sp, sp, -4
+    sw   s11, 0(sp)
+    addi sp, sp, -4
+    sw   s10, 0(sp)
+    addi sp, sp, -4
+    sw   s9, 0(sp)
+    addi sp, sp, -4
+    sw   s8, 0(sp)
+    addi sp, sp, -4
+    sw   s7, 0(sp)
+    addi sp, sp, -4
+    sw   s6, 0(sp)
+    addi sp, sp, -4
+    sw   s5, 0(sp)
+    addi sp, sp, -4
+    sw   s4, 0(sp)
+    addi sp, sp, -4
+    sw   s3, 0(sp)
+    addi sp, sp, -4
+    sw   s2, 0(sp)
+    addi sp, sp, -4
+    sw   s1, 0(sp)
+    addi sp, sp, -4
+    sw   s0, 0(sp)
+    addi sp, sp, -4
+    sw   ra, 0(sp)      # Chronological last item pushed
 
-    # 2. Save Old SP and Load New SP
-    sw sp, 0(a0)        
-    mv sp, a1           
+    # -------------------------------------------------------------------------
+    # 2. SAVE OLD SP AND LOAD NEW SP (With Dynamic Self-Switch Refresh)
+    # -------------------------------------------------------------------------
+    # Save the current, valid push pointer directly to RAM
+    sw   sp, 0(a0)        
 
-    # 3. Restore New Task Context & Resume Task
-    lw ra,  0(sp)
-    lw s0,  4(sp)
-    lw s1,  8(sp)
-    lw s2,  12(sp)
-    lw s3,  16(sp)
-    lw s4,  20(sp)
-    lw s5,  24(sp)
-    lw s6,  28(sp)
-    lw s7,  32(sp)
-    lw s8,  36(sp)
-    lw s9,  40(sp)
-    lw s10, 44(sp)
-    lw s11, 48(sp)
-    addi sp, sp, 56     # Free the aligned frame
+    # Compare CurrentTask (a2) and NextTask (a3)
+    # If they are NOT equal, skip the reload and jump straight to standard_swap
+    bne  a2, a3, standard_swap
+
+    # If we get here, CurrentTask == NextTask (Self-Switch)
+    # Update a1 with the fresh, deep sp value we just saved to 0(a0)
+    lw   a1, 0(a0)        
+
+standard_swap:
+    # In either case, we update sp prior to popping
+    mv   sp, a1           
+
+    # -------------------------------------------------------------------------
+    # 3. POP CONTEXT (Pure sequential pops)
+    # -------------------------------------------------------------------------
+    lw   ra, 0(sp)
+    addi sp, sp, 4
+    lw   s0, 0(sp)
+    addi sp, sp, 4
+    lw   s1, 0(sp)
+    addi sp, sp, 4
+    lw   s2, 0(sp)
+    addi sp, sp, 4
+    lw   s3, 0(sp)
+    addi sp, sp, 4
+    lw   s4, 0(sp)
+    addi sp, sp, 4
+    lw   s5, 0(sp)
+    addi sp, sp, 4
+    lw   s6, 0(sp)
+    addi sp, sp, 4
+    lw   s7, 0(sp)
+    addi sp, sp, 4
+    lw   s8, 0(sp)
+    addi sp, sp, 4
+    lw   s9, 0(sp)
+    addi sp, sp, 4
+    lw   s10, 0(sp)
+    addi sp, sp, 4
+    lw   s11, 0(sp)
+    addi sp, sp, 4      
     ret
+
+    # Critically reload ra from the stack frame slot 0(sp) one final time 
+    # to clean up any register modifications caused by the print routine
+    lw ra,  0(sp)       
 
 # -----------------------------------------------------------------------------
 # 2. Stack Pointer Utility (Returns the current hardware SP)
@@ -53,16 +108,6 @@ GetStackPointer:
     mv a0, sp
     ret
 
-
-.equ CLINT_MTIME, 0x02004ff8
-
-.global read_mtime_counter
-read_mtime_counter:
-    li   t0, CLINT_MTIME
-    lw   a1, 4(t0)            # High 32 bits of mtime in a1
-    lw   a0, 0(t0)            # Low 32 bits of mtime in a0
-                              # Units: 100 ns ticks (10 MHz clock frequency on QEMU virt)
-                              # 10,000 ticks = 1 ms
-    ret    
-
 .end
+
+

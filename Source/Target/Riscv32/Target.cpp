@@ -57,108 +57,32 @@ TimerTickType GetSystemTickCount() {
     return (TimerTickType)freeRunningMsCounter;
 }
 
-void StackClass::PrimeStack() {
-    StackType rawSp = (StackType) StackTop;
-    rawSp &= SixteenByteBoundaryMask;
-    StackTop = (StackType *) rawSp;
-    StackType *sp = (StackType *) rawSp;
+void StackClass::PrimeStack() 
+{
+    // 1. Start directly at the raw top of the allocated stack memory pool
+    uint32_t *sp = (uint32_t *) StackTop;
 
-    *(--sp) = 11; 
-    *(--sp) = 10; 
-    *(--sp) = 9;  
-    *(--sp) = 8;  
-    *(--sp) = 7;  
-    *(--sp) = 6;  
-    *(--sp) = 5;  
-    *(--sp) = 4;  
-    *(--sp) = 3;  
-    *(--sp) = 2;  
-    *(--sp) = 1;  
-    *(--sp) = 0;  
+    // 2. PUSH CONTEXT (Pure sequential pointer decrements mapping directly to Target.s)
+    *(--sp) = 11; // s11 (Chronologically first push, highest address)
+    *(--sp) = 10; // s10
+    *(--sp) = 9;  // s9
+    *(--sp) = 8;  // s8
+    *(--sp) = 7;  // s7
+    *(--sp) = 6;  // s6
+    *(--sp) = 5;  // s5
+    *(--sp) = 4;  // s4
+    *(--sp) = 3;  // s3
+    *(--sp) = 2;  // s2
+    *(--sp) = 1;  // s1
+    *(--sp) = 0;  // s0
     
-    *(--sp) = (StackType) (uintptr_t) TrampolineToErrorHandler; 
-    *(--sp) = (StackType) (uintptr_t) TrampolineToNewTask;      
+    // RA (TrampolineToNewTask) is at the lowest memory address (Chronologically last push)
+    *(--sp) = (uint32_t)(uintptr_t)TrampolineToNewTask; 
 
-    SavedSp = sp;
+    // 3. Save the finalized stack pointer position back for scheduler allocation
+    // sp is pointing EXACTLY at the memory slot holding TrampolineToNewTask!
+    SavedSp = (StackType *) sp;
     return;
 }
-
-/*
-
-#include <stdint.h>
-
-class HardwareTimer {
-private:
-    // Member variables - no static keywords, clean encapsulation
-    uint32_t lastRawHardwareTicks;
-    uint32_t subMsTicksBucket;
-    uint32_t freeRunningMsCounter;
-
-public:
-    // Constructor using a clean initialization list
-    HardwareTimer() 
-        : lastRawHardwareTicks(0)
-        , subMsTicksBucket(0)
-        , freeRunningMsCounter(0)
-    {
-        // Calibrate the clock immediately on power-on/construction
-        lastRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
-    }
-
-    // Main polling interface method
-    TimerTickType GetSystemTickCount() {
-        // 1. Grab the absolute, ever-growing 10MHz hardware clock
-        uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
-
-        // 2. Find the tiny slice of raw ticks that passed since the last poll
-        uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
-        lastRawHardwareTicks = currentRawHardwareTicks;
-
-        // 3. Drop them into our sub-millisecond remainder bucket
-        subMsTicksBucket += elapsedTicks;
-
-        // 4. Drain the bucket completely to catch every single millisecond
-        while (subMsTicksBucket >= 10000) {
-            freeRunningMsCounter++;
-            subMsTicksBucket -= 10000;
-        }
-
-        // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
-        return (TimerTickType)freeRunningMsCounter;
-    }
-};
-
-
-*/
-
-/*
-
-static uint32_t lastRawHardwareTicks = 0;
-static uint32_t subMsTicksBucket = 0;
-static uint32_t freeRunningMsCounter = 0;
-
-TimerTickType GetSystemTickCount() {
-    // 1. Grab the absolute, ever-growing 10MHz hardware clock
-    uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
-
-    // 2. Find the tiny slice of raw ticks that passed since the last poll
-    uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
-    lastRawHardwareTicks = currentRawHardwareTicks;
-
-    // 3. Drop them into our sub-millisecond remainder bucket
-    subMsTicksBucket += elapsedTicks;
-
-    // 4. Drain the bucket completely to catch every single millisecond
-    while (subMsTicksBucket >= 10000) {
-        freeRunningMsCounter++;
-        subMsTicksBucket -= 10000;
-    }
-
-    // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
-    return (TimerTickType)freeRunningMsCounter;
-}
-
-
-*/
 
 } // namespace TicsNameSpace
