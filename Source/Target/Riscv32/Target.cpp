@@ -1,62 +1,118 @@
 /*
- Hello World compile line 32 bit execute in Tics folder: riscv64-unknown-elf-g++ --specs=picolibc.specs -I/home/mdm/projects/Tics/Source -g -march=rv32imac -mabi=ilp32 -fno-exceptions /home/mdm/projects/Tics/Source/Target/Riscv32/Main.cpp -O0 /home/mdm/projects/Tics/Source/Tics.cpp /home/mdm/projects/Tics/Source/Target/Riscv32/Target.cpp /home/mdm/projects/Tics/Source/Target/Riscv32/Target.s -o /home/mdm/projects/Tics/Bin/Main.elf
+MIT License
 
- Hello World compile line 64 bit execute in Tics folder: riscv64-unknown-elf-g++ -specs=picolibc.specs Sandbox/hello.cpp -o Sandbox/hello_64.elf
+Copyright (c) 2026 Michael Dennis McDonnell
 
- Build: riscv64-unknown-elf-g++ -march=rv32imac -mabi=ilp32 -g -O0 --specs=picolibc.specs --oslib=semihost -I./Source ./Source/Target/Riscv32/Target.s ./Source/Target/Riscv32/Target.cpp ./Source/Tics.cpp ./Source/Target/Riscv32/Main.cpp -o ./Bin/Main.elf
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files(the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions :
 
- QEMU: qemu-system-riscv32 -machine virt -cpu rv32 -smp 1 -m 128M -bios none -kernel ./Bin/Main.elf -display none -s -S &clear
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Terminate: killall qemu-system-riscv32
-
-Do this to run:
-
-0. Terminate tasks (see above)
-1. Debug and Run panel select drop down value of: Connect GDB to QEMU (Tics)
-2. Open Target/Riscv32/Main.cpp
-3. Run QEMU (see above)
-3. Press F5
-
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 */
+
+//-----------------------------------------------------------------------------
+// Riscv-32 Specific C++ Functions
+//
+// This file includes all Riscv-32 specific functions that can be written in 
+// C++. Functions that must be written assembly language are in file 
+// Target.s.
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Includes
+//-----------------------------------------------------------------------------
 #include "Tics.hpp" 
 #include <stdlib.h>
 
+//-----------------------------------------------------------------------------
+// Defines
+//-----------------------------------------------------------------------------
+
+// The Riscv32 timer "register".
 #define RV32_CLINT_MTIME_ADDR (*(volatile uint32_t*)0x0200BFF8)
 
+//-----------------------------------------------------------------------------
+// Externs
+//-----------------------------------------------------------------------------
+
+// A C function that trampolines to the Tics error handler.
 extern "C" void TrampolineToErrorHandler();
+
+// A C function that trampolines to the task function when a task is started.
 extern "C" void TrampolineToNewTask();
 
+//-----------------------------------------------------------------------------
+// Namespace
+//-----------------------------------------------------------------------------
 namespace TicsNameSpace {
 
-static uint32_t lastRawHardwareTicks = 0;
-static uint32_t subMsTicksBucket = 0;
-static uint32_t freeRunningMsCounter = 0;
+//-----------------------------------------------------------------------------
+/// \brief Returns the millisecond system tick count.
+//-----------------------------------------------------------------------------
+TimerTickType GetSystemTickCount() 
+{
+    // Persistent storage for the last sampled clock edge, measured in raw ticks (1 tick = 100 nanoseconds / 0.1 microseconds).
+    static uint32_t lastRawHardwareTicks = 0;
 
-TimerTickType GetSystemTickCount() {
-    // 1. Grab the absolute, ever-growing 10MHz hardware clock
+    // Accumulation bucket for fractional tick remainders that have passed since the last whole millisecond boundary.
+    static uint32_t subMsTicksBucket = 0;
+
+    // Global monotonic system timeline counting upward, measured in whole milliseconds (1 ms = 1,000,000 nanoseconds).
+    static uint32_t freeRunningMsCounter = 0;
+
+    // Dereference the physical, memory-mapped CLINT timer register tracking the continuous 10MHz hardware oscillator.
     uint32_t currentRawHardwareTicks = RV32_CLINT_MTIME_ADDR;
 
-    // Test counter.
-    unsigned int counter = 0;
-
-    // 2. Find the tiny slice of raw ticks that passed since the last poll
+    // Calculate the raw ticks elapsed since the last function execution, natively handling any 32-bit integer overflows.
     uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
+
+    // Cache the most recent hardware clock snapshot into permanent memory to establish the baseline for the next poll pass.
     lastRawHardwareTicks = currentRawHardwareTicks;
 
-    // 3. Drop them into our sub-millisecond remainder bucket
+    // Deposit the freshly harvested slice of raw execution ticks directly into the sub-millisecond remainder storage bucket.
     subMsTicksBucket += elapsedTicks;
 
-    // 4. Drain the bucket completely to catch every single millisecond
-    while (subMsTicksBucket >= 10000) {
-        freeRunningMsCounter++;
-        subMsTicksBucket -= 10000;
-        counter++;
+    // Check if the accumulated remainder bucket contains enough raw energy to cross at least a single 1 millisecond threshold.
+    if (subMsTicksBucket >= 10000) {
+        // Execute direct integer division to compute exactly how many whole milliseconds have elapsed (10,000 raw ticks = 1 ms).
+        uint32_t msPassed = subMsTicksBucket / 10000;
+
+        // Advance the master free-running clock timeline by the exact number of verified whole milliseconds that just passed.
+        freeRunningMsCounter += msPassed;
+
+        // Apply a modulo operation to cleanly drain the consumed milliseconds and preserve the remaining fractional ticks.
+        subMsTicksBucket %= 10000;
     }
 
-    // 5. Return the 32-bit millisecond integer (wraps back to 0 naturally)
+    // Cast the permanent 32-bit millisecond tracking integer to your customized type definition and return it to the scheduler.
     return (TimerTickType)freeRunningMsCounter;
 }
 
+//-----------------------------------------------------------------------------
+/// \brief Primes a newly created task's stack.
+///
+/// When a task is first run, it's registers that were saved just before the 
+/// task was swtiched out to let another task run, must be restored. This is done
+/// by copying the saved registers off the stack and writing the values back
+/// to the registers. Well, the very first time the task is run, there is
+/// no previous time when registers were saved to the stack. So, we have
+/// to write register values to the stack so that the very first time
+/// the task is run, there are registers on the stack so that the task
+/// switching code can run properly. The register values written to the stack
+/// are completely arbitrary.
+//-----------------------------------------------------------------------------
 void StackClass::PrimeStack() 
 {
     // 1. Start directly at the raw top of the allocated stack memory pool
@@ -76,11 +132,10 @@ void StackClass::PrimeStack()
     *(--sp) = 1;  // s1
     *(--sp) = 0;  // s0
     
-    // RA (TrampolineToNewTask) is at the lowest memory address (Chronologically last push)
+    // The return address, register ra, is at the lowest memory address (Chronologically last push)
     *(--sp) = (uint32_t)(uintptr_t)TrampolineToNewTask; 
 
-    // 3. Save the finalized stack pointer position back for scheduler allocation
-    // sp is pointing EXACTLY at the memory slot holding TrampolineToNewTask!
+    // 3. Save the finalized stack pointer position to this task's Stack.SavedSp variable.
     SavedSp = (StackType *) sp;
     return;
 }

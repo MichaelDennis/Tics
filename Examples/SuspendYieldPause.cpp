@@ -127,8 +127,10 @@ void TaskBClass::Task()
 //-----------------------------------------------------------------------------
 int main()
 {
-    // Instantiate the tasks.
+    // Instantiate TaskA.
     TaskA = new TaskAClass("TaskA");
+
+    // Instantiate TaskB.
     TaskB = new TaskBClass("TaskB");
 
     // Start tasking.

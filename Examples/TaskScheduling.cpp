@@ -11,10 +11,13 @@
 //-----------------------------------------------------------------------------
 // Task Scheduling
 //
-// A task is scheduled to run in two ways:
+// A task is scheduled to run by sending it a msg (the Send() function adds
+// the receiving task to the ReadyList).
 //
-// 1. By sending it a msg.
-// 2. By scheduling it by calling Schedule(). (Mostly for Tics internal use only.)
+// The Schedule() function is for Tics internal us only. It adds a msg 
+// named ScheduleMsg to the ReadyList. The Suspend() function does 
+// add msgs named ScheduleMsg  
+// is for Tics internal use only. It adds a msg to the ReadyList
 //
 // The difference is that for case 1, the task receives a msg, and for case
 // 2, it does not. So if the task is waiting for a msg to arrive,
@@ -64,7 +67,18 @@ void TaskAClass::Task()
 
         // Three ways to schedule tasks.
 
-        // 1. Call Schedule(). This will schedule the task to run (by adding it to the Ready List).
+        // 1. Schedule() is for Tics internal use only. It's shown here in the interest
+        // completeness. Generaly, user's should never call Schedule. Schedule sends
+        //  a msg to TaskB with a msg number of ScheduleMsg (i.e. it is added to the
+        // ReadyList. The msg number ScheduleMsg has a special meaning to Tics, which is, 
+        // Tics will run TaskB, but will not place the msg in TaskB's msg list. So,
+        // that Schedule() is a convenient way to run a task, without requiring that
+        // the task be burdened with processing a do-nothing msg. When a task is
+        // first created Tics uses Schedule() to start the task. If Schedule()
+        // didn't exist, then Tics would have to send a newly created task
+        // a dummy msg to start it, and the task would have to pull the msg out of 
+        // its msg list and just ignore it and let garbage collection dispose
+        // of it.
         Schedule(TaskB);
 
         // 2. Send the task a msg. This will schedule the task to run AND
@@ -79,7 +93,7 @@ void TaskAClass::Task()
         Send(TaskB, ScheduleMsg);
 
         // Wait a bit.
-        Pause(100);
+        Pause(1000);
     }
 }
 
