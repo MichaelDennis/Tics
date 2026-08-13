@@ -77,7 +77,7 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// Pointer the tasks. Could be put into a namespace. Just put in global space 
+// Pointer to the tasks. Could be put into a namespace. Just put in global space 
 // for this demo.
 //-----------------------------------------------------------------------------
 RequesterTaskClass* RequesterTask;

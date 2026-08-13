@@ -1,0 +1,12 @@
+Language: Cpp
+BasedOnStyle: LLVM
+
+BreakBeforeBraces: Allman
+
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
