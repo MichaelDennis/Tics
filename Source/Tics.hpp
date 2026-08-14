@@ -822,18 +822,9 @@ class TaskClass : public NodeClass
     // Functions
 
     // Constructor
-    TaskClass(
-        // Optional task name.
-        const char *Name = 0,
-
-        // The priority used when a task is scheduled.
-        int Priority = MediumPriority,
-
-        // The task flag bits are set in the Flags arg.
-        int Flags = (ScheduleTaskOnCreationFlag),
-
-        // Set the stack size to the default.
-        int StackSizeInBytes = StackClass::DefaultStackSizeInBytes);
+    TaskClass(const char *Name = 0, int Priority = MediumPriority,
+              int Flags = (ScheduleTaskOnCreationFlag),
+              int StackSizeInBytes = StackClass::DefaultStackSizeInBytes);
 
     // TaskClass destructor
     ~TaskClass();
@@ -861,122 +852,37 @@ class TaskClass : public NodeClass
     void Schedule(TaskClass *task = 0);
 
     // Send a msg to another task.
-    MsgClass *Send(
-
-        // The task to send the msg to.
-        TaskClass *task,
-
-        // The msg number, which tells the received task what to do.
-        int msgNum = NullMsg,
-
-        // Optional msg data.
-        int data = 0,
-
-        // The number of ticks to wait before sending out the msg.
-        int delay = 0,
-
-        // The msg will be added to the Ready List according to its priority.
-        int priority = MediumPriority,
-
-        // The sender of the msg, If 0, the sender defaults to "this" task.
-        TaskClass *sender = 0);
+    MsgClass *Send(TaskClass *task, int msgNum = NullMsg, int data = 0, int delay = 0,
+                   int priority = MediumPriority, TaskClass *sender = 0);
 
     // Send a pre-made msg.
     MsgClass *Send(MsgClass *msg);
 
     // Reply to a received msg.
-    void Reply(
-        // The msg to reply to.
-        MsgClass *receivedMsg,
+    void Reply(MsgClass *receivedMsg, int msgNum = NullMsg, int data = 0, int delay = 0,
+               int priority = MediumPriority, TaskClass *sender = 0);
 
-        // The msg number to reply with.
-        int msgNum = NullMsg,
+    void Pause(int numTicks = DefaultNumTicks, int priority = MediumPriority);
 
-        // Optional msg data.
-        int data = 0,
+    MsgClass *StartTimer(int numTicks = DefaultNumTicks, int priority = MediumPriority,
+                         int msgNum = TimeoutMsg);
 
-        // The number of ticks to wait before sending out the msg.
-        int delay = 0,
-
-        // The msg will be added to the Ready List according to its priority.
-        int priority = MediumPriority,
-
-        // The sender of the msg, If 0, the sender defaults to "this" task.
-        TaskClass *sender = 0);
-
-    // Pause for the indicated number of ticks.
-    void Pause(
-
-        // The number of ticks to sleep.
-        int numTicks = DefaultNumTicks,
-
-        // The priority of the internal wake-up msg sent to the issuing task.
-        int priority = MediumPriority);
-
-    // Creates a delayed msg and sends a TimeoutMsg to the receiving task when
-    // the timer expires.
-    MsgClass *StartTimer(
-
-        // The number of timer ticks to delay by.
-        int numTicks = DefaultNumTicks,
-
-        // The priority of the wake-up msg sent to the issuing task.
-        int priority = MediumPriority,
-
-        // The msg number to send to the issuing task.
-        int msgNum = TimeoutMsg);
-
-    // Schedule this task to run again, then suspend it to let other tasks run.
     void Yield(void);
 
-    // Sleep until the indicated msg arrives.
-    MsgClass *Wait(
+    MsgClass *Wait(int msgNum = AnyMsg);
 
-        // The msg number to wait for.
-        int msgNum = AnyMsg);
-
-    // Wait for any msg in an array.
-    MsgClass *Wait(
-
-        // Wake up the task on receiving any msg in the array.
-        int *msgNumArray,
-
-        // The number of msgs in the array.
-        int numMsgs);
+    MsgClass *Wait(int *msgNumArray, int numMsgs);
 
     // Wait for an item to be added to a fifo.
-    void Wait(
+    void Wait(FifoClass *fifo, void *data);
 
-        // The fifo to wait on.
-        FifoClass *fifo,
+    MsgClass *Recv(int msgNum = AnyMsg);
 
-        // A pointer to the fifo slot that has data after the task resumes.
-        void *data);
+    MsgClass *Recv(int *msgNumArray, int numMsgs);
 
-    // Returns a pointer to the requested msg number if found in MsgList,
-    // otherwise a 0 is returned.
-    MsgClass *Recv(
-
-        // The msg number requested.
-        int msgNum = AnyMsg);
-
-    // Search MsgList for any msg in the array and return it if found,
-    MsgClass *Recv(
-
-        // The msgNum array to search for a match in.
-        int *msgNumArray,
-
-        // The number of msgs in the array.
-        int numMsgs);
-
-    // Suspend the current task and run the task at the front of the Ready List.
     void Suspend();
 
-    // Remove all references to the task from MsgList.
-    void DeleteFromMsgList(
-
-        // The task to remove.
-        TaskClass *task);
+    void DeleteFromMsgList(TaskClass *task);
 
     // Returns true if any of the bits in the mask are true.
     bool GetFlag(int mask)
@@ -1065,23 +971,14 @@ class TicsSystemTaskClass : public TaskClass
     // Functions
 
     // Constructor
-    TicsSystemTaskClass()
-        :
-
-          TaskClass(
-              // Optional task name. Used for debugging.
-              0,
-              // Task priority.
-              MediumPriority,
-              // Unexpected msgs are dropped.
-              DropUnexpectedMsgsFlag) {};
+    TicsSystemTaskClass() : TaskClass(0, MediumPriority, DropUnexpectedMsgsFlag) {};
 
     // The task.
     void Task();
 };
 
 //-----------------------------------------------------------------------------
-// TicsSystemTaskClass
+// NodeHeaderClass
 //
 // A header for memory blocks which are linked list elements of the memory
 // pool used by the overridden operators new and delete.
@@ -1093,7 +990,6 @@ class NodeHeaderClass : public TicsBaseClass
 
     enum NodeHeaderClassEnum
     {
-
         // Used to check if a memory block was corrupted.
         SignatureValue = 0x01234567
     };
@@ -1112,18 +1008,15 @@ class NodeHeaderClass : public TicsBaseClass
 
     // Functions
 
-    // Initialize the class data members.
     void Initialize(int numBytesRequested, MemMgrClass *memMgrPool);
 
-    // Returns true if Signature == SignatureValue.
     bool SignatureMatches();
 
-    // Returns true if MemMgrPool == memMgrPool.
     bool MemMgrMatches(MemMgrClass *memMgrPool);
 };
 
 //-----------------------------------------------------------------------------
-// TicsSystemTaskClass
+// MemNodeClass
 //
 // A header for memory blocks which are linked list elements of the memory
 // pool used by the overridden operators new and delete.
@@ -1145,9 +1038,11 @@ class MemNodeClass : public NodeHeaderClass
         Initialize(numBytesRequested, memMgrSource);
     }
 
-    // Returns the start address of the user area. (Remember, the block includes
-    // a header, separate from the user area.)
-    void *UserArea() { return &StartOfUserArea; }
+    void *UserArea()
+    {
+        // Return a pointer to the user part of the memory block.
+        return &StartOfUserArea;
+    }
 
     void *SystemArea()
     {
@@ -1158,6 +1053,12 @@ class MemNodeClass : public NodeHeaderClass
 
 // Singly linked list class used as the memory pool for the blocks managed by
 // the MemMgrClass.
+//-----------------------------------------------------------------------------
+// MemNodeListClass
+//
+// Singly linked list class used as the memory pool for the blocks managed by
+// the MemMgrClass.
+//-----------------------------------------------------------------------------
 class MemNodeListClass : public TicsBaseClass
 {
   private:
@@ -1182,10 +1083,8 @@ class MemNodeListClass : public TicsBaseClass
     // Returns true if the list is empty.
     bool IsEmpty() { return NumNodesInList == 0; }
 
-    // Add a node to the front of the list.
     void Add(MemNodeClass *item);
 
-    // Remove and return a mode of the size requested, otherwise 0.
     MemNodeClass *Remove(int numBytesRequested);
 };
 
@@ -1215,19 +1114,17 @@ class MemMgrClass : public TicsBaseClass
     // The number of bytes in the memory array that are available for block
     // creation.
     int NumBytesAvailable;
+
+    // The memory block pool, a single linke list.ds
     MemNodeListClass NodeList;
 
   private:
     // Functions
 
-    // Return a chunk of memory from the memory array that will become a memory
-    // block.
     MemNodeClass *AllocateFromMemory(int numBytesRequested);
 
-    // Return a memory block, if it exists, of the requested size, otherwise 0.
     MemNodeClass *AllocateFromList(int numBytesRequested);
 
-    // Rounds up the desired number of bytes to allocate to an aligned value.
     int NumBytesToAllocate(int numBytesRequested);
 
   public:
@@ -1236,10 +1133,8 @@ class MemMgrClass : public TicsBaseClass
     // Constructor
     MemMgrClass(void *memory, int memorySizeInBytes);
 
-    // Return a pointer to a block of the requested size, otherwise 0.
     void *Allocate(int numBytesRequested);
 
-    // Deallocate a block.
     void DeAllocate(void *p);
 };
 
@@ -1261,30 +1156,16 @@ extern FifoClass InterfaceFifo;
 extern ErrorHandlerClass ErrorHandler;
 
 // External functions.
-TimerTickType ReadSimulatedTickCount();
-TimerTickType ReadRealTickCount();
 TimerTickType ReadTickCount();
 void CheckForSystemEvents();
 void CheckForInterrupts();
 void Schedule(TaskClass *task);
 void MemSet(void *dst, int numChars, char data);
 void MemCopy(void *dst, void *src, int numChars);
-void SwitchTasks(TaskClass *newTask);
 void Suspend();
 bool DelayIsCorrect(TimerTickType delay);
 void TrampolineToErrorHandler();
 void TrampolineToNewTask();
-
-//-----------------------------------------------------------------------------
-/// \brief Task numbers are used for sending msgs from within an isr
-/// to a Tics user task, and also for sending msgs between processors.
-///
-/// All task numbers are listed here.
-//-----------------------------------------------------------------------------
-enum TaskNumEnums
-{
-
-};
 
 //-----------------------------------------------------------------------------
 // IsrPacketClass

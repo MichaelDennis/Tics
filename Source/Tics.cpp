@@ -920,10 +920,6 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 //-----------------------------------------------------------------------------
 /// \brief Read and return the tick count from the system clock.
 ///
-/// When running Tics on Linux, (simulation mode), we read the time tick
-/// using the Linux time tick, otherwise, we read it from the the global
-/// variable stored in shared RAM, which is updated continuously by the user.
-///
 /// \return The current system tick count reading.
 //-----------------------------------------------------------------------------
 TimerTickType ReadTickCount() { return GetSystemTickCount(); }
