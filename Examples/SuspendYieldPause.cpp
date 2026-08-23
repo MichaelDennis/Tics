@@ -7,6 +7,7 @@
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
 #include <iostream>
+#include <stdio.h>
 
 //-----------------------------------------------------------------------------
 // This example explains how Suspend, Yield, Pause are used. See the comments
@@ -24,9 +25,21 @@
 //
 // Yield
 //
-// Yield schedules the active task, which adds it to the ready list, then 
+// Yield schedules the active task, which adds it to the ready list, then
 // invokes Suspend(), which runs the task at the front of the ready list.
 //-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Globals
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Enums
+//-----------------------------------------------------------------------------
+enum
+{
+    LenTaskC = 20
+};
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -36,8 +49,9 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Define TaskA class
 //-----------------------------------------------------------------------------
-class TaskAClass : public TaskClass {
-public:
+class TaskAClass : public TaskClass
+{
+  public:
     // Functions
     TaskAClass(const char *name = 0) : TaskClass(name) {}
     void Task();
@@ -46,26 +60,41 @@ public:
 //-----------------------------------------------------------------------------
 // Define TaskB class
 //-----------------------------------------------------------------------------
-class TaskBClass : public TaskClass {
-public:
+class TaskBClass : public TaskClass
+{
+  public:
     // Functions
     TaskBClass(const char *name = 0) : TaskClass(name) {}
     void Task();
 };
 
 //-----------------------------------------------------------------------------
+// Define TaskB class
+//-----------------------------------------------------------------------------
+class TaskCClass : public TaskClass
+{
+  public:
+    // Functions
+    TaskCClass(const char *name = 0) : TaskClass(name) {}
+    void Task();
+};
+
+//-----------------------------------------------------------------------------
 // These will point to instances of TaskA and TaskB.
 //-----------------------------------------------------------------------------
-TaskAClass * TaskA;
-TaskBClass * TaskB;
+TaskAClass *TaskA;
+TaskBClass *TaskB;
+TaskCClass *TaskC[LenTaskC];
+TaskCClass *TaskC2;
+TaskCClass *TaskC3;
 
 //-----------------------------------------------------------------------------
 // Implement TaskA.
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    while (true) {
-
+    while (true)
+    {
         // Wait for a request to wake up TaskB.
         Wait(RqstMsg);
 
@@ -79,8 +108,8 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    while (true) {
-
+    while (true)
+    {
         // Send a msg to TaskA to request a msg to wake us up after the Suspend() call.
         Send(TaskA, RqstMsg);
 
@@ -103,12 +132,12 @@ void TaskBClass::Task()
         // Pause(m) lets other tasks run until "m" clock ticks are up, after
         // which this task is scheduled to run again. Note: The following
         // is only useful for those wanting to learn Tics internals.
-        
+
         // At each task switch the internal Pause tick count is adjusted by
         // reading the number of clock ticks that have occurred since the
-        // last task switch. The clock tick value is returned from function 
+        // last task switch. The clock tick value is returned from function
         // TicsSystem.ReadTickCount(). ReadTickCount() uses the C
-        // clock() function to read ticks, but the user can modify the 
+        // clock() function to read ticks, but the user can modify the
         // ReadTickCount() function to read from his own hardware timer.
         //
         // Pause Accuracy
@@ -118,7 +147,27 @@ void TaskBClass::Task()
 
         cout << "Pausing for 1 second.  ";
 
-       Pause(1000);
+        Pause(1000);
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Implement TaskC.
+//-----------------------------------------------------------------------------
+void TaskCClass::Task()
+{
+    int i = 0;
+
+    while (true)
+    {
+        if (Name[0] == '1' && Name[1] == '9' && (++i % 1000) == 0)
+        {
+            // Test.
+            cout << Name << " ";
+        }
+
+        // Test.
+        Yield();
     }
 }
 
@@ -127,15 +176,24 @@ void TaskBClass::Task()
 //-----------------------------------------------------------------------------
 int main()
 {
+    const char *buf[] = {"0",  "1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",
+                         "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"};
+
     // Instantiate TaskA.
     TaskA = new TaskAClass("TaskA");
 
     // Instantiate TaskB.
     TaskB = new TaskBClass("TaskB");
 
+    // Instantiate TaskC's.
+
+    for (int i = 0; i < LenTaskC; i++)
+    {
+        TaskC[i] = new TaskCClass(buf[i]);
+    }
+
     // Start tasking.
     Suspend();
 
     return 0;
 }
-

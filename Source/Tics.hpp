@@ -94,7 +94,7 @@ enum TicsNamespaceEnum
     // The number of system clock ticks per millisecond.
     NumSystemClocksPerMs = 1,
 
-    // The number of ints in the Tics dynamic memory space.
+    // The number of bytes in the Tics dynamic memory space.
     SizeMemMgr = (0x8000 * 2),
 
     // The default number of interrupt fifo slots.
@@ -162,9 +162,8 @@ enum NodePriorityEnum
 enum MsgNumEnum
 {
     // This must be the first and smallest defined msg number.
-    FirstMsgNum = 0,
+    FirstMsg = 0,
 
-    // 1        2               3               4               5
     NullMsg,
     AnyMsg,
     RunMsg,
@@ -1166,6 +1165,8 @@ void Suspend();
 bool DelayIsCorrect(TimerTickType delay);
 void TrampolineToErrorHandler();
 void TrampolineToNewTask();
+void Send(TaskClass *task, FifoClass *fifo, void *data);
+void MemCopy(void *dst, void *src, int numChars);
 
 //-----------------------------------------------------------------------------
 // IsrPacketClass

@@ -53,13 +53,6 @@ void TrampolineToNewTask();
 
 namespace TicsNameSpace
 {
-
-// The Tics user increments this counter once per ms.
-// If TicsFlags.SimulationMode is true, then the user is not required
-// to increment this counter, because Tics reads the Linux system
-// clock to obtain the current tick value. See ReadTickCount().
-volatile TimerTickType TicsMsTimer;
-
 // Msgs are created by allocating a memory block from this area.
 // An instance of MemMgrClass class is created to manage this space.
 // (See the definition of MemMgr below).
@@ -110,15 +103,20 @@ TaskClass *CurrentTask = &StartupTask;
 IdleTaskClass IdleTask("IdleTask");
 
 // Isr's and external CPUs schedule tasks to run by adding them to this fifo.
-FifoClass InterfaceFifo(sizeof(TaskClass *), NumInterfaceFifoSlots);
+FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
+
+// InterfaceFifo
+ListClass IsrFifoList;
 
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
-#include <cstdio>
+// Adds the task to the ReadyList or InterruptFio.
+void Schedule(TaskClass *task, bool inIsr = false);
 
 //-----------------------------------------------------------------------------
-/// \brief StackClass constructor. Allocates stack space and defines the stack protective pad.
+/// \brief StackClass constructor. Allocates stack space and defines the stack
+/// protective pad.
 ///
 /// Allocate memory for the stack memory pool, and define the protective "pad"
 /// area at the bottom of the stack, which is used to detect pending stack overflow.
@@ -866,7 +864,6 @@ void TaskClass::Wait(FifoClass *fifo, void *data)
     }
     else
     {
-        // Suspend until a msg is put into the fifo.
         Suspend();
     }
 }
@@ -935,7 +932,7 @@ TimerTickType ReadTickCount() { return GetSystemTickCount(); }
 ///
 /// \param task - The task to schedule.
 //-----------------------------------------------------------------------------
-void Schedule(TaskClass *task)
+void Schedule(TaskClass *task, bool inIsr)
 {
     // Make sure we have a non-null pointer.
     if (task == 0)
@@ -943,7 +940,7 @@ void Schedule(TaskClass *task)
         ErrorHandler.Report(ErrorNullTaskPointerInSchedule);
     }
 
-    // Add the task to the Ready List.
+    // Add the msg to the Ready List.
     ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
 }
 
@@ -980,7 +977,7 @@ void CheckForInterrupts()
         }
 
         // Schedule the task.
-        Schedule(task);
+        Schedule(task, false);
     }
 }
 
@@ -1437,7 +1434,7 @@ void TaskClass::Schedule(TaskClass *task)
     }
 
     // Schedule the task to run. (Without the namespace qualifier we'd have recursion).
-    TicsNameSpace::Schedule(taskToSchedule);
+    TicsNameSpace::Schedule(taskToSchedule, false);
 }
 
 //-----------------------------------------------------------------------------
@@ -2427,7 +2424,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
 //-----------------------------------------------------------------------------
 bool DelayIsCorrect(TimerTickType delay)
 {
-    if (delay < 0 || delay > MaxTimerSize)
+    if (delay > MaxTimerSize)
     {
         return false;
     }
@@ -2620,12 +2617,30 @@ void TrampolineToNewTask()
 }
 
 //-----------------------------------------------------------------------------
-/// DumpStackData - Stack debugging aid function
+/// \brief Sends a msg from an isr to a task.
+///
+/// The normal TaskClass::Send() function cannot be used from within an isr
+/// because the linked list links can get corrupted. Instead, a FifoClass
+/// object is used. The isr adds data items to the fifo and the task retrieves
+/// the objects from the fifo. The isr must use this function to send data
+/// to a task, if that is required. The preferred method is for the isr to handle
+/// all necessary work, but if work must be deferred to a task, then this function
+/// must be used, or the isr can simply do what this function does, i.e., add data to a
+/// fifo, then schedule the task to run. When the task runs, it retrieves the data
+/// from the fifo, either directly or by using function
+/// TaskClass::Wait(FifoClass * fifo, void * data).
+///
+/// \param task - The task to send the data to.
+/// \param fifo - A pointer to the fifo. The fifo can only be used by one isr.
+/// \param data - The data (msg) to be copied into the fifo slot.
 //-----------------------------------------------------------------------------
-void DumpStackData()
+void Send(TaskClass *task, FifoClass *fifo, void *data)
 {
-    // Print out where we are.
-    // cout << "Entering the TaskSwitch function."
+    // Add the data block into the task's fifo.
+    fifo->Add(data);
+
+    // Add the task to the Interface fifo.
+    Schedule(task, true);
 }
 
 //-----------------------------------------------------------------------------

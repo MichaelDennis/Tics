@@ -23,8 +23,9 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Define TaskA class
 //-----------------------------------------------------------------------------
-class TaskAClass : public TaskClass {
-public:
+class TaskAClass : public TaskClass
+{
+  public:
     // Functions
     void Task();
 };
@@ -32,8 +33,9 @@ public:
 //-----------------------------------------------------------------------------
 // Define TaskB class
 //-----------------------------------------------------------------------------
-class TaskBClass : public TaskClass {
-public:
+class TaskBClass : public TaskClass
+{
+  public:
     // Functions
     void Task();
 };
@@ -41,8 +43,8 @@ public:
 //-----------------------------------------------------------------------------
 // These will point to instances of TaskA and TaskB.
 //-----------------------------------------------------------------------------
-TaskAClass * TaskA;
-TaskBClass * TaskB;
+TaskAClass *TaskA;
+TaskBClass *TaskB;
 
 //-----------------------------------------------------------------------------
 // Implement TaskA.
@@ -50,10 +52,10 @@ TaskBClass * TaskB;
 void TaskAClass::Task()
 {
     int loopCounter = 0;
-    MsgClass * msg;
+    MsgClass *msg;
 
-    while (true) {
-
+    while (true)
+    {
         // Loop counter.
         cout << "LoopCounter = " << loopCounter++ << endl;
 
@@ -67,8 +69,6 @@ void TaskAClass::Task()
         Send(TaskB, HelloMsg);
 
         // Send TaskB a msg.
-        Send(TaskB, GoMsg);
-        Send(TaskB, GoMsg);
         Send(TaskB, GoMsg);
 
         // Now wait for a response msg named HelloMsg from TaskB.
@@ -94,10 +94,10 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    MsgClass * msg;
+    MsgClass *msg;
 
-    while (true) {
-
+    while (true)
+    {
         // Wait for a msg named HelloMsg (from TaskA).
         msg = Wait(HelloMsg);
 
@@ -119,4 +119,3 @@ int main()
 
     return 0;
 }
-
