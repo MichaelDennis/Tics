@@ -84,6 +84,9 @@ extern "C" TimerTickType GetSystemTickCount();
 
 enum TicsNamespaceEnum
 {
+    // The number of IsrFifo slots.
+    NumIsrFifoSlots = 16,
+
     // The maximum number of characters allowed in a string, including a
     // terminating 0.
     MaxNumStringChars = 32,
@@ -449,6 +452,9 @@ class MsgClass : public NodeClass
 
     /// Optional message data (usage is task‑specific).
     int Data;
+
+    /// Optional generic pointer for user usage. //MDM Maybe we remove this.
+    void *Ptr;
 
     /// Delay in system ticks before the message is delivered (0 = immediate).
     TimerTickType Delay;
@@ -850,12 +856,12 @@ class TaskClass : public NodeClass
     // is used.
     void Schedule(TaskClass *task = 0);
 
+    // Send a pre-made msg.
+    MsgClass *Send(MsgClass *msg);
+
     // Send a msg to another task.
     MsgClass *Send(TaskClass *task, int msgNum = NullMsg, int data = 0, int delay = 0,
                    int priority = MediumPriority, TaskClass *sender = 0);
-
-    // Send a pre-made msg.
-    MsgClass *Send(MsgClass *msg);
 
     // Reply to a received msg.
     void Reply(MsgClass *receivedMsg, int msgNum = NullMsg, int data = 0, int delay = 0,
@@ -1158,7 +1164,7 @@ extern ErrorHandlerClass ErrorHandler;
 TimerTickType ReadTickCount();
 void CheckForSystemEvents();
 void CheckForInterrupts();
-void Schedule(TaskClass *task);
+void Schedule(TaskClass *task, bool inIsr);
 void MemSet(void *dst, int numChars, char data);
 void MemCopy(void *dst, void *src, int numChars);
 void Suspend();
@@ -1169,11 +1175,41 @@ void Send(TaskClass *task, FifoClass *fifo, void *data);
 void MemCopy(void *dst, void *src, int numChars);
 
 //-----------------------------------------------------------------------------
-// IsrPacketClass
-//
-// Defines the format of the isr packet which is used to send data from
-// a remote device through cache coherent shared RAM.
+/// IsrPacketClass
+///
+/// Defines the format of the isr packet which is used to send deferred interrupt
+/// processing data from an isr to the IsrFifo.
 //-----------------------------------------------------------------------------
+class IsrPacketClass
+{
+  public:
+    // Pointer to the task that processes HandlerData.
+    TaskClass *HandlerTask;
+
+    // Pointer to the isr data that the HandlerTask will process.
+    void *HandlerData;
+
+    // When HandlerTask finishes prpcessing the HandlerData, it sends a msg
+    // to HandlerMemMgr to let it know that it can free the data block pointed to
+    // by HandlerData.
+    TaskClass *HandlerMemMgr;
+};
+
+//-----------------------------------------------------------------------------
+/// IsrMsgClass
+///
+/// This is the msg class used to send the deferred isr work msg to the
+/// handler task.
+//-----------------------------------------------------------------------------
+class IsrMsgClass : public MsgClass
+{
+  public:
+    // Data used by isr handler task to process the deferred isr data.
+    IsrPacketClass *IsrPacket;
+
+    // Constructor
+    IsrMsgClass(TaskClass *task, int msgNum, IsrPacketClass *isrPacket) : MsgClass(task, msgNum) {}
+};
 
 //-----------------------------------------------------------------------------
 // End TicsNameSpace.

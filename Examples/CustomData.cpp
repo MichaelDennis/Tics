@@ -10,8 +10,7 @@
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
-//MDM#include <iostream>
-#include <stdio.h>
+#include <iostream>
 
 //-----------------------------------------------------------------------------
 // Namespaces
@@ -27,16 +26,17 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Define custom msg class.
 //-----------------------------------------------------------------------------
-class CustomMsgClass : public MsgClass {
-public:
+class CustomMsgClass : public MsgClass
+{
+  public:
     // Data
     int X;
     int Y;
     int Z;
 
     // Functions
-    CustomMsgClass(TaskClass * task, int msgNum = HelloMsg, int x = 0, int y = 0, int z = 0) :
-        MsgClass(task, msgNum), X(x), Y(y), Z(z)
+    CustomMsgClass(TaskClass *task, int msgNum = HelloMsg, int x = 0, int y = 0, int z = 0)
+        : MsgClass(task, msgNum), X(x), Y(y), Z(z)
     {
         // Nothing to do here, since the necessary work is done in the initialization list.
     }
@@ -45,8 +45,9 @@ public:
 //-----------------------------------------------------------------------------
 // Define TaskA class
 //-----------------------------------------------------------------------------
-class TaskAClass : public TaskClass {
-public:
+class TaskAClass : public TaskClass
+{
+  public:
     // Functions
     void Task();
 };
@@ -54,8 +55,9 @@ public:
 //-----------------------------------------------------------------------------
 // Define TaskB class
 //-----------------------------------------------------------------------------
-class TaskBClass : public TaskClass {
-public:
+class TaskBClass : public TaskClass
+{
+  public:
     // Functions
     void Task();
 };
@@ -63,8 +65,8 @@ public:
 //-----------------------------------------------------------------------------
 // TaskA and TaskB will be instantiated in main().
 //-----------------------------------------------------------------------------
-TaskAClass * TaskA;
-TaskBClass * TaskB;
+TaskAClass *TaskA;
+TaskBClass *TaskB;
 
 //-----------------------------------------------------------------------------
 // Implement TaskA.
@@ -73,10 +75,10 @@ void TaskAClass::Task()
 {
     int counter = 0;
     int x, y, z;
-    CustomMsgClass * msg;
+    CustomMsgClass *msg;
 
-    while (true) {
-
+    while (true)
+    {
         // Set the msg data.
         x = counter++;
         y = counter++;
@@ -84,7 +86,7 @@ void TaskAClass::Task()
 
         // Create a custom msg.
         msg = new CustomMsgClass(TaskB, HelloMsg, x, y, z);
-        
+
         // Send TaskB the msg.
         Send(msg);
 
@@ -103,17 +105,17 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    CustomMsgClass * msg;
+    CustomMsgClass *msg;
 
-    while (true) {
-
+    while (true)
+    {
         // Wait for a msg named HelloMsg (from TaskA).
-        msg = (CustomMsgClass *) Wait(HelloMsg);
+        msg = (CustomMsgClass *)Wait(HelloMsg);
 
         // Print out the data we received.
-        //MDM cout << endl << "TaskB received x,y,z data of (" 
-        //MDM    << msg->X << ", " << msg->Y << ", " << msg->Z << ")." << endl;
-        printf("Hello... ");
+        cout << endl
+             << "TaskB received x,y,z data of (" << msg->X << ", " << msg->Y << ", " << msg->Z
+             << ")." << endl;
 
         // Reply back to the sender.
         Reply(msg, HelloMsg);
@@ -134,4 +136,3 @@ int main()
 
     return 0;
 }
-

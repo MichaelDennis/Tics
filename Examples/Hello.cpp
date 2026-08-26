@@ -51,7 +51,7 @@ using namespace TicsNameSpace;
 //
 // 1. Show how tasks are created and used in the Tics real-time operating system. The
 // Tics RTOS is a simple message based RTOS written in C++. It provides for multi-tasking,
-// msg passing, msg waiting, and timer management.
+// msg passing, msg waiting, memory mgmt, and timer management.
 //
 // 2. Present a simple Hello World program that prints a msg to the screen once per second.
 //

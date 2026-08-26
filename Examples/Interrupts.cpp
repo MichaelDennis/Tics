@@ -8,12 +8,13 @@
 // Ideally you should handle interrupts inside the isr, but sometimes this
 // isn't possible, and work must be deferred to a task.
 //
-// To send a msg to a task, the isr sends a fifo msg to a waiting task using the Send function
+// To send a msg to a task, the isr sends a fifo msg to a waiting task using the
+// Send function variant shown below.
+//
+// void Send(TaskClass *task, FifoClass *fifo, void *data);
+//
+// The receiving task waits for the msg from the isr by using the Wait function
 // variant shown below.
-//
-// void TicsNameSpace::Send(TaskClass * task, FifoClass * fifo, void * data);
-//
-// The receiving task waits for the msg from the isr by using the Wait function variant shown below.
 //
 // void TaskClass::Wait(FifoClass * fifo, void * data);
 //
@@ -58,33 +59,6 @@ using namespace std;
 void Isr();
 
 //-----------------------------------------------------------------------------
-// Test code
-//-----------------------------------------------------------------------------
-
-void printReadyList(const char *func)
-{
-    int numNodes = ReadyList.NumNodesInList;
-    MsgClass *msg = 0;
-
-    // Print num items in the ReadyList.
-    cout << endl << endl << func << " " << "Num items in ReadyList is " << numNodes << endl << endl;
-
-    // Get a pointer to the first msg in the list.
-    msg = (MsgClass *)ReadyList.Head->Next;
-
-    // Print out each msg in the ReadyList.
-    for (int i = 0; i < numNodes; i++)
-    {
-        if (msg->Receiver->Name != 0)
-        {
-            cout << "Node " << i << " Receiver task = " << msg->Receiver->Name << endl;
-        }
-
-        msg = (MsgClass *)msg->Next;
-    }
-}
-
-//-----------------------------------------------------------------------------
 // This class defines the data object that will be sent from the isr to the task.
 //-----------------------------------------------------------------------------
 class IsrDataClass
@@ -107,7 +81,7 @@ class IsrDataClass
 FifoClass *IsrFifo;
 
 //-----------------------------------------------------------------------------
-// Define TaskA, which will simulate interrupts buy periodically
+// Define TaskA, which will simulate interrupts by periodically
 // calling the isr() function.
 //-----------------------------------------------------------------------------
 class TaskAClass : public TaskClass
@@ -121,7 +95,7 @@ class TaskAClass : public TaskClass
 };
 
 //-----------------------------------------------------------------------------
-// Define TaskB, which will receive the interrupt data from the isr.
+// Define TaskB, which will receive the interrupt data from the simulated isr.
 //-----------------------------------------------------------------------------
 class TaskBClass : public TaskClass
 {
@@ -140,56 +114,54 @@ TaskAClass *TaskA;
 TaskBClass *TaskB;
 
 //-----------------------------------------------------------------------------
-// Implement TaskA.
+// This task simulates an interrupt by calling a simulated isr once a second.
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    for (;;)
+    while (true)
     {
         // Simulate an interrupt by calling the isr function.
         Isr();
 
-        // Pause for a bit.
+        // Pause for one second.
         Pause(1000);
     }
 }
 
 //-----------------------------------------------------------------------------
-// Interrupt handler. The raw interrupt vector (jumps) directly to this function.
+// A simulated isr.
 //-----------------------------------------------------------------------------
 void Isr()
 {
+    // A data struct to hold the simulated isr readings.
     static IsrDataClass isrData;
 
-    // Simulate the isr reading data.
+    // Simulate the isr reading new data.
     isrData.A++;
     isrData.B++;
     isrData.C++;
 
-    // Add the isr data to the isr fifo, and schedule TaskB.
+    // Add the isr data to the isr fifo, which is the fifo that the isr data processing
+    // task (TaskB in this example) waits on. See TaskB.
     Send(TaskB, IsrFifo, &isrData);
 }
 
 //-----------------------------------------------------------------------------
-// Implement TaskB.
+// Implement the task that processes the isr data that is sent to it from
+// the isr. See the Isr() function above.
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    IsrDataClass p;
-    int lastValue = 0;
+    IsrDataClass isrData;
 
-    for (;;)
+    while (true)
     {
-        cout << "Number of fifo items = " << IsrFifo->NumItemsInFifo << endl << endl;
+        // Wait for the isr to place the isr data into the fifo after which the Wait() function
+        // copies the data from thhe fifo into the isrData structure.
+        Wait(IsrFifo, &isrData);
 
-        // Wait for the isr to place the data object into the fifo.
-        Wait(IsrFifo, &p);
-
-        if (IsrFifo->NumItemsInFifo >= 1)
-        {
-            cout << "(" << p.A << ", " << p.B << ", " << p.C << ")" << endl;
-            lastValue = p.A;
-        }
+        // Output the data that we just received from the isr.
+        cout << "(" << isrData.A << ", " << isrData.B << ", " << isrData.C << ")" << endl;
     }
 }
 
@@ -198,15 +170,15 @@ void TaskBClass::Task()
 //-----------------------------------------------------------------------------
 int main()
 {
-    int n = sizeof(IsrDataClass);
+    int fifoSlotSize = sizeof(IsrDataClass);
 
-    // Create the isr fifo.
-    IsrFifo = new FifoClass(n, 8);
+    // Create a test fifo.
+    IsrFifo = new FifoClass(fifoSlotSize, 8);
 
-    // Instantiate the interrupt simulator task.
+    // Instantiate the interrupt simulator task. Add an optional task name for debugging.
     TaskA = new TaskAClass("TaskA");
 
-    // Instantiate the isr task.
+    // Instantiate the task that processes isr data. Add an optional task name for debugging.
     TaskB = new TaskBClass("TaskB");
 
     // Start tasking.

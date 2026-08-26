@@ -105,8 +105,8 @@ IdleTaskClass IdleTask("IdleTask");
 // Isr's and external CPUs schedule tasks to run by adding them to this fifo.
 FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 
-// InterfaceFifo
-ListClass IsrFifoList;
+// Isr's add an entry to this fifo to defer non-critical isr processing to a task.
+FifoClass IsrFifo(sizeof(IsrPacketClass), NumIsrFifoSlots);
 
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
@@ -851,20 +851,58 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Sends a msg from within an isr to a task.
+///
+/// The normal TaskClass::Send() function cannot be used from within an isr
+/// because the linked list links can get corrupted. Instead, a FifoClass
+/// object is used. The isr adds data items to the fifo and the task retrieves
+/// the objects from the fifo. The isr must use this function to send data
+/// to a task, if that is required. The preferred method is for the isr to handle
+/// all necessary work, but if work must be deferred to a task, then this function
+/// must be used, or the isr can simply do what this function does, i.e., add data to a
+/// fifo, then schedule the task to run. When the task runs, it retrieves the data
+/// from the fifo, either directly or by using function
+/// TaskClass::Wait(FifoClass *fifo, void *data).
+///
+/// \param task - The task to send the data to.
+/// \param fifo - The task's fifo. The fifo can only be used by one isr.
+/// \param data - The data (msg) to be copied into the fifo slot.
+///
+/// Note: There is no need for a data count, because the fifo knows
+/// its slot size.
+//-----------------------------------------------------------------------------
+void Send(TaskClass *task, FifoClass *fifo, void *data)
+{
+    // Add the data block into the task's fifo.
+    fifo->Add(data);
+
+    // Add the task to the Interrupt fifo.
+    Schedule(task, true);
+}
+
+//-----------------------------------------------------------------------------
 /// \brief Waits for a fifo msg.
 ///
 /// See the description given above for Send().
 //-----------------------------------------------------------------------------
 void TaskClass::Wait(FifoClass *fifo, void *data)
 {
-    if (fifo->IsNotEmpty())
+    while (true)
     {
-        // Copy the data from the fifo into the data block.
-        fifo->Remove(data);
-    }
-    else
-    {
-        Suspend();
+        if (fifo->IsNotEmpty())
+        {
+            // Copy the data from the fifo into the data block.
+            fifo->Remove(data);
+
+            // Return the fifo data to the caller.
+            return;
+        }
+        else
+        {
+            // Suspend until the task is scheduled to run. See function
+            // void Send(TaskClass *task, FifoClass *fifo, void *data)
+            Suspend();
+        }
     }
 }
 
@@ -922,15 +960,21 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 TimerTickType ReadTickCount() { return GetSystemTickCount(); }
 
 //-----------------------------------------------------------------------------
-/// \brief Schedule a task to run.
+/// \brief Add the indicated task to the Ready List.
 ///
 /// The Schedule function is for Tics internal use only. At the user level,
 /// the only approved way to schedule a task is to send a msg to it.
 ///
-/// The task is scheduled by adding a ScheduleMsg to the ReadyList according
-/// to the task's priority.
+/// If inIsr is true, the task is added to the Interrupt Fifo, and will be
+/// transferred to the Ready List on the next task switch, otherwise, if inIsr
+/// is false, the task is added to the Ready List.
+///
+/// Note: Isr's must not re-enable interrupts - ALL interrupts must remain disabled
+/// for the duration of the isr.
 ///
 /// \param task - The task to schedule.
+///
+/// \param inIsr - Set to true if this function is being called from an isr.
 //-----------------------------------------------------------------------------
 void Schedule(TaskClass *task, bool inIsr)
 {
@@ -940,25 +984,37 @@ void Schedule(TaskClass *task, bool inIsr)
         ErrorHandler.Report(ErrorNullTaskPointerInSchedule);
     }
 
-    // Add the msg to the Ready List.
-    ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
+    // If we're in an interrupt service routine...
+    if (inIsr)
+    {
+        // Schedule the task by adding it to the Interrupt Fifo, rather
+        // than the Ready List, to avoid list corruption.
+        // All interrupts must remain disabled while within the isr,
+        // otherwise the Interrupt Fifo can be corrupted.
+        InterfaceFifo.Add(&task);
+    }
+    else
+    {
+        // Add the task to the Ready List.
+        ReadyList.AddByPriority(new MsgClass(task, ScheduleMsg, 0, 0, task->Priority));
+    }
 }
 
+//-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 /// \brief If there are any tasks in the Interrupt Fifo, move them to the
 /// Ready List.
 ///
 /// Tasks can't be scheduled directly (by adding to the Ready List) from within
-/// an external source like an isr or an external processor. (otherwise, list
-/// corruption could occur). Instead, tasks are scheduled by adding them to the
-/// Interrupt Fifo, and then later moved to the Ready List.
-/// This function is called at each task switch.
+/// an isr (otherwise, list corruption could occur). Instead, tasks are scheduled
+/// by adding them to the Interrupt Fifo, and then later moved to the
+/// Ready List. This function is called at each task switch.
 //-----------------------------------------------------------------------------
 void CheckForInterrupts()
 {
     TaskClass *task;
 
-    // If the Interface Fifo is not empty, then remove the task from it, and schedule it.
+    // If the Interrupt Fifo is not empty, then remove the task from it, and schedule it.
     while (InterfaceFifo.IsNotEmpty())
     {
         // Get the task from the Interrupt Fifo.
@@ -977,7 +1033,7 @@ void CheckForInterrupts()
         }
 
         // Schedule the task.
-        Schedule(task, false);
+        Schedule(task);
     }
 }
 
@@ -2634,14 +2690,14 @@ void TrampolineToNewTask()
 /// \param fifo - A pointer to the fifo. The fifo can only be used by one isr.
 /// \param data - The data (msg) to be copied into the fifo slot.
 //-----------------------------------------------------------------------------
-void Send(TaskClass *task, FifoClass *fifo, void *data)
+/* MDM void Send(TaskClass *task, FifoClass *fifo, void *data)
 {
     // Add the data block into the task's fifo.
     fifo->Add(data);
 
     // Add the task to the Interface fifo.
     Schedule(task, true);
-}
+} */
 
 //-----------------------------------------------------------------------------
 /// End namespace TicsNameSpace
