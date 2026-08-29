@@ -5,11 +5,16 @@
 //-----------------------------------------------------------------------------
 // Interrupt Handling
 //
-// Ideally you should handle interrupts inside the isr, but sometimes this
+// Ideally interrupts should be handled inside the isr, but sometimes this
 // isn't possible, and work must be deferred to a task.
 //
-// To send a msg to a task, the isr sends a fifo msg to a waiting task using the
-// Send function variant shown below.
+// A standard Tics Send() msg cannot be sent from within an isr, because the
+// interrupt could have occurred in the middle of a linked list update.
+// So, from within an isr, interrupt-safe fifo msgs must be used to send
+// a msg to a task.
+//
+// To send a msg to a task from within an isr, the isr sends a fifo msg to
+// a waiting task using the Send function variant shown below.
 //
 // void Send(TaskClass *task, FifoClass *fifo, void *data);
 //
@@ -18,28 +23,21 @@
 //
 // void TaskClass::Wait(FifoClass * fifo, void * data);
 //
+// The receiving task must know the class of the data arg so that the fifo data gets
+// populated into the class data structure properly.
+//
 // ** Important things to know about isr behavior **
 //
-// There must be a separate isr fifo for each isr / task pair. This is best explained by example.
+//  On entering an isr, all interrupts must remain disabled until the isr exits. This avoids the
+// problem of another interrupt interferring with the current interrupt wjile it is writing
+// to the fifo.
 //
-// Let's assume we have one isr that handles 3 separate events. The isr decides to defer event
-// handling for each event to 3 separate tasks. To accomplish this, we must also create 3 separate
-// fifos, one for each task. So, for example, when event1 is received by isrA, isrA would issue this
-// call: Send(task1, fifo1, data1). And similarly, when event2 is received by isrA, isrA would issue
-// this call: Send(task2, fifo2, data2). And similarly for event3.
+// Both the isr and the task that handles deferred isr data are written by the user.
 //
-// This also means that only isrA can use fifo1, fido2, and fifo3. If isrB wants
-// to send msgs to a task, isrB must create its own personal fifo, one for each task that isrB needs
-// to talk to. Note also that a task that expects a msg from an isr must know the name of the fifo
-// to wait on with the Wait function. The task must also know the type of the void data pointer so
-// that it can properly cast the data.
-//
-// However, the isr does not have to have a fifo for each event. It could just have one fifo that is
-// serviced by one task. The data could then point to a struct that has the event number as the
-// first entry. The following entries in the struct would depend upon the event number. The task
-// could then dispatch the data to the appropriate task (the task that can handle the event). So in
-// this example, we have a dispatcher task
-//
+// The user is responsible for freeing up and data blocks that were used to transfer
+// data to the deferred data handling task. For example, if the class instance used
+// to send data to the deferred data handling task included a pointer to a dynamic
+// data block, then the user must manage freeing it.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
@@ -157,7 +155,7 @@ void TaskBClass::Task()
     while (true)
     {
         // Wait for the isr to place the isr data into the fifo after which the Wait() function
-        // copies the data from thhe fifo into the isrData structure.
+        // copies the data from the fifo into the isrData structure.
         Wait(IsrFifo, &isrData);
 
         // Output the data that we just received from the isr.

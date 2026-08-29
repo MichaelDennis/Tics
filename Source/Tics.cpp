@@ -93,7 +93,7 @@ TicsSystemTaskClass TicsSystemTask;
 // set to NextTask immediately after the context switch.
 TaskClass *NextTask = 0;
 
-StartupTaskClass StartupTask("StartupTask, MediumPriority, 0");
+StartupTaskClass StartupTask("StartupTask", MediumPriority, 0);
 
 // Pointer to the task that is currently running. Initially we point it to a dummy task.
 TaskClass *CurrentTask = &StartupTask;
@@ -111,7 +111,7 @@ FifoClass IsrFifo(sizeof(IsrPacketClass), NumIsrFifoSlots);
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
-// Adds the task to the ReadyList or InterruptFio.
+// Adds the task to the ReadyList or InterefaceFifo.
 void Schedule(TaskClass *task, bool inIsr = false);
 
 //-----------------------------------------------------------------------------
@@ -175,7 +175,7 @@ StackClass::~StackClass(void)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Make various checks to insure that the stack has not been corrupted.
+/// \brief Make various checks to ensure that the stack has not been corrupted.
 //-----------------------------------------------------------------------------
 void StackClass::Check(void)
 {
@@ -193,7 +193,7 @@ void StackClass::Check(void)
     }
     // Note: Initially the Sp is set to StackTop + 1, which is a valid value
     // because the first valid stack operation will be a push, which means the
-    // the first value written tto the stack will be written to StackTop.
+    // the first value written to the stack will be written to StackTop.
     else if (currentSp > (StackTop + 1))
     {
         ErrorHandler.Report(ErrorCurrentSpIsAboveStackTop);
@@ -296,7 +296,7 @@ void TaskClass::Suspend(void)
     TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp, CurrentTask,
                NextTask);
 
-    // We are now on the NextTask's stack. So, update the CurrenTask's pointer.
+    // We are now on the NextTask's stack. So, update the CurrentTask's pointer.
     CurrentTask = NextTask;
 
     // Check the CurrentTask's stack.
@@ -865,7 +865,7 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// TaskClass::Wait(FifoClass *fifo, void *data).
 ///
 /// \param task - The task to send the data to.
-/// \param fifo - The task's fifo. The fifo can only be used by one isr.
+/// \param fifo - The task's fifo.
 /// \param data - The data (msg) to be copied into the fifo slot.
 ///
 /// Note: There is no need for a data count, because the fifo knows
@@ -987,11 +987,12 @@ void Schedule(TaskClass *task, bool inIsr)
     // If we're in an interrupt service routine...
     if (inIsr)
     {
-        // Schedule the task by adding it to the Interrupt Fifo, rather
+        // Schedule the task by adding it to the InterfaceFifo, rather
         // than the Ready List, to avoid list corruption.
         // All interrupts must remain disabled while within the isr,
-        // otherwise the Interrupt Fifo can be corrupted.
-        InterfaceFifo.Add(&task);
+        // otherwise the InterfaceFifo can be corrupted.
+        // The InterfaceFifo is checked at each context switch.
+        InterfaceFifo.Add((void *)&task);
     }
     else
     {
@@ -1018,7 +1019,7 @@ void CheckForInterrupts()
     while (InterfaceFifo.IsNotEmpty())
     {
         // Get the task from the Interrupt Fifo.
-        InterfaceFifo.Remove(&task);
+        InterfaceFifo.Remove((void *)&task);
 
         // Check for an invalid task.
         if (task == 0)
@@ -1059,7 +1060,8 @@ void CheckForSystemEvents()
 void Suspend()
 {
     // Suspend the current task, and run the next task in the Ready List.
-    TicsSystemTask.Suspend();
+    // The CurrentTask is StartupTask.
+    CurrentTask->Suspend();
 }
 
 //-----------------------------------------------------------------------------
@@ -1161,7 +1163,7 @@ TaskClass::~TaskClass()
     // which is the code that called this destructor.
     TaskList.Remove(this);
 
-    // The node Id will be bumped in the TicBaseClass, so no need to bump it hear.
+    // The node Id will be bumped in the TicBaseClass, so no need to bump it here.
     // Bumping (incrementing) the Id marks the node (TaskClass instance) as changed.
 }
 
@@ -1414,7 +1416,7 @@ MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 //-----------------------------------------------------------------------------
 /// \brief Cancel a previously sent msg by deleting it.
 ///
-/// Attempt to a remove previously sent msg with the given node Id from the system.
+/// Attempt to remove a previously sent msg with the given node Id from the system.
 ///
 /// \param nodeId - Obtainable from the msg returned by Send() (msg->Id).
 ///
@@ -1650,7 +1652,7 @@ MsgClass *TaskClass::Send(MsgClass *msg)
         msg->Sender = this;
     }
 
-    // If this not a delayed msg, then schedule the receiver task to run.
+    // If this is not a delayed msg, then schedule the receiver task to run.
     if (msg->Delay == 0)
     {
         ReadyList.AddByPriority(msg);
@@ -1740,17 +1742,6 @@ void IdleTaskClass::Task()
             // List.
             Suspend();
         }
-        else
-        {
-            // There is no work to do, since the Ready List is empty.
-            //
-            // If you want to save power, this is where you would put your "sleep"
-            // instruction. It's your choice as to whether the hardware timer should
-            // be kept running when in sleep mode.
-            //
-            // Otherwise, do nothing here and the system will continuously poll for
-            // system events - this is the mode we recommend as it's simpler.
-        }
     }
 }
 
@@ -1771,7 +1762,11 @@ void TicsSystemTaskClass::Task()
         msg = Wait();
 
         // Process the request.
-        switch (msg->MsgNum) {}
+        switch (msg->MsgNum)
+        {
+        default:
+            break;
+        }
     }
 }
 
@@ -1845,7 +1840,7 @@ bool StringCompare(const char *a, const char *b)
 
         // Since we have fallen to here, that means the the above comparison failed,
         // which means that *a and *b are equal to one another. If they are both equal,
-        // and both *a and *b equal 0, then then we have a match.
+        // and both *a and *b equal 0, then we have a match.
         if (*a == 0 && *b == 0)
         {
             return true;
@@ -1857,7 +1852,7 @@ bool StringCompare(const char *a, const char *b)
     }
 
     // If we've come to here, then the strings don't match or they
-    // are monger than the limit allowed by
+    // are longer than the limit allowed.
     return false;
 }
 
@@ -2215,7 +2210,7 @@ int MemMgrClass::NumBytesToAllocate(int numBytesRequested)
     numBytesToAllocate = numBytesRequested + (int)sizeof(NodeHeaderClass) + (int)mask;
 
     // Round down to make sure we are on a word boundary.
-    numBytesToAllocate &= ~mask;
+    numBytesToAllocate &= (int)~mask;
 
     // Return the number of bytes requested plus overhead.
     return numBytesToAllocate;
@@ -2523,7 +2518,7 @@ void TicsBaseClass::operator delete(void *p)
 //-----------------------------------------------------------------------------
 TicsBaseClass::TicsBaseClass()
 {
-    // Object Id starts at 1. Zero is used to indicated that the Id has
+    // Object Id starts at 1. Zero is used to indicate that the Id has
     // not been assigned.
     Id = ++IdCounter;
 }
@@ -2597,7 +2592,7 @@ bool TaskClass::UserPriorityIsValid(int priority)
         return true;
     }
 
-    // SO, this is a uer task, which means that its priority must be in the range below.
+    // SO, this is a user task, which means that its priority must be in the range below.
     return InRange(LowPriority, HighPriority, priority);
 }
 
@@ -2671,33 +2666,6 @@ void TrampolineToNewTask()
     // Start the new task.
     CurrentTask->Task();
 }
-
-//-----------------------------------------------------------------------------
-/// \brief Sends a msg from an isr to a task.
-///
-/// The normal TaskClass::Send() function cannot be used from within an isr
-/// because the linked list links can get corrupted. Instead, a FifoClass
-/// object is used. The isr adds data items to the fifo and the task retrieves
-/// the objects from the fifo. The isr must use this function to send data
-/// to a task, if that is required. The preferred method is for the isr to handle
-/// all necessary work, but if work must be deferred to a task, then this function
-/// must be used, or the isr can simply do what this function does, i.e., add data to a
-/// fifo, then schedule the task to run. When the task runs, it retrieves the data
-/// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass * fifo, void * data).
-///
-/// \param task - The task to send the data to.
-/// \param fifo - A pointer to the fifo. The fifo can only be used by one isr.
-/// \param data - The data (msg) to be copied into the fifo slot.
-//-----------------------------------------------------------------------------
-/* MDM void Send(TaskClass *task, FifoClass *fifo, void *data)
-{
-    // Add the data block into the task's fifo.
-    fifo->Add(data);
-
-    // Add the task to the Interface fifo.
-    Schedule(task, true);
-} */
 
 //-----------------------------------------------------------------------------
 /// End namespace TicsNameSpace

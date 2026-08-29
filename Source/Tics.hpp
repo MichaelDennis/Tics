@@ -52,7 +52,7 @@ namespace TicsNameSpace
 {
 
 // The stack element type.
-typedef uintptr_t StackType;
+typedef unsigned int StackType;
 
 // The timer counter element type.
 typedef unsigned int TimerTickType;
@@ -261,7 +261,7 @@ enum ErrorMsgEnum
     ErrorNullTaskPointerInSchedule = 1044,
     ErrorTaskDoesNotExistInSchedule = 1045,
     ErrorNullTaskPtrInCheckForInterrupts = 1046,
-    ErrorAttemptToDeleteANonexistentTask = 1047,
+    ErrorAttemptToDeleteANonExistentTask = 1047,
     ErrorAttemptToDeleteTheCurrentTask = 1048,
     ErrorAttemptToDeleteASystemTask = 1049,
     ErrorAttemptToDeleteACorruptedMsg = 1050,
@@ -568,7 +568,7 @@ class ListClass : public TicsBaseClass
     // Run various checks on the list.
     void CheckListIntegrity(void);
 
-    //  Run various check prior to inserting a node into a list.
+    //  Run various checks prior to inserting a node into a list.
     void DoInsertSafetyChecks(NodeClass *a, NodeClass *b);
 };
 
@@ -600,7 +600,7 @@ class TaskListClass : public ListClass
     // Remove the indicated task from the task list.
     void RemoveTask(TaskClass *task);
 
-    // Add the task to th task list.
+    // Add the task to the task list.
     void Add(TaskClass *task);
 
     // Return true if the task exists in the TaskList.
@@ -609,7 +609,7 @@ class TaskListClass : public ListClass
     // Return true if the task with the indicated id exists.
     bool TaskExists(int taskId);
 
-    // Returns a pointer the the task with the indicated name.
+    // Returns a pointer the task with the indicated name.
     TaskClass *GetTaskPointer(const char *name);
 };
 
@@ -1039,7 +1039,7 @@ class MemNodeClass : public NodeHeaderClass
     // Constructor
     MemNodeClass(int numBytesRequested, MemMgrClass *memMgrSource) : StartOfUserArea(0)
     {
-        // INitializes the MemNodeClass data members.
+        // Initializes the MemNodeClass data members.
         Initialize(numBytesRequested, memMgrSource);
     }
 
@@ -1120,7 +1120,7 @@ class MemMgrClass : public TicsBaseClass
     // creation.
     int NumBytesAvailable;
 
-    // The memory block pool, a single linke list.ds
+    // The memory block pool, a singly linked list.
     MemNodeListClass NodeList;
 
   private:
@@ -1189,7 +1189,7 @@ class IsrPacketClass
     // Pointer to the isr data that the HandlerTask will process.
     void *HandlerData;
 
-    // When HandlerTask finishes prpcessing the HandlerData, it sends a msg
+    // When HandlerTask finishes processing the HandlerData, it sends a msg
     // to HandlerMemMgr to let it know that it can free the data block pointed to
     // by HandlerData.
     TaskClass *HandlerMemMgr;
