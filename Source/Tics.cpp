@@ -53,6 +53,9 @@ void TrampolineToNewTask();
 
 namespace TicsNameSpace
 {
+// Initialize the static Tics base Id counter.
+int TicsBaseClass::IdCounter = 0;
+
 // Msgs are created by allocating a memory block from this area.
 // An instance of MemMgrClass class is created to manage this space.
 // (See the definition of MemMgr below).
@@ -1122,7 +1125,7 @@ TaskClass::~TaskClass()
     // Make sure the task exists.
     if (TaskExists(this) == false)
     {
-        ErrorHandler.Report(ErrorAttemptToDeleteANonexistentTask);
+        ErrorHandler.Report(ErrorAttemptToDeleteANonExistentTask);
     }
 
     // Although a task can delete itself, we recommend against it.Have another task delete it.

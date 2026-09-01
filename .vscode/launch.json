@@ -12,6 +12,24 @@
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
             "preLaunchTask": "Build Tics and Boot QEMU"
+        },
+        {
+            "name": "Debug Tics on Linux Host (x86_32)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Bin/TicsLinuxTest",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true,
+            "preLaunchTask": "Build Tics for Linux Host",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
         }
     ]
 }

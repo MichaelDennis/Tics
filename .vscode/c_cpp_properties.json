@@ -3,19 +3,28 @@
         {
             "name": "Linux-m32",
             "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/Source/**",
-                "/usr/include/c++/15/**",
-                "/usr/include/x86_64-linux-gnu/c++/15/32/**",
-                "/usr/include/**"
+                "${workspaceFolder}/**"
             ],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c11",
-            "cppStandard": "c++17",
+            "cppStandard": "c++11",
             "intelliSenseMode": "linux-gcc-x86",
             "compilerArgs": [
                 "-m32"
+            ],
+            "defines": [
+                "_REENTRANT"
             ]
+        },
+        {
+            "name": "RISC-V 32-bit",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "riscv64-unknown-elf-g++",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-x86"
         }
     ],
     "version": 4

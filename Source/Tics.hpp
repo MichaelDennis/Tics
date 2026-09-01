@@ -325,7 +325,7 @@ class TicsBaseClass
 
     // Unique id number that is assigned to an instance on creation and
     // deletion.
-    inline static int IdCounter = 0;
+    static int IdCounter;
 
     // The actual id. See the constructor and destructor.
     int Id = 0;
@@ -1172,7 +1172,6 @@ bool DelayIsCorrect(TimerTickType delay);
 void TrampolineToErrorHandler();
 void TrampolineToNewTask();
 void Send(TaskClass *task, FifoClass *fifo, void *data);
-void MemCopy(void *dst, void *src, int numChars);
 
 //-----------------------------------------------------------------------------
 /// IsrPacketClass
@@ -1193,22 +1192,6 @@ class IsrPacketClass
     // to HandlerMemMgr to let it know that it can free the data block pointed to
     // by HandlerData.
     TaskClass *HandlerMemMgr;
-};
-
-//-----------------------------------------------------------------------------
-/// IsrMsgClass
-///
-/// This is the msg class used to send the deferred isr work msg to the
-/// handler task.
-//-----------------------------------------------------------------------------
-class IsrMsgClass : public MsgClass
-{
-  public:
-    // Data used by isr handler task to process the deferred isr data.
-    IsrPacketClass *IsrPacket;
-
-    // Constructor
-    IsrMsgClass(TaskClass *task, int msgNum, IsrPacketClass *isrPacket) : MsgClass(task, msgNum) {}
 };
 
 //-----------------------------------------------------------------------------

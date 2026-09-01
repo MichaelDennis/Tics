@@ -11,22 +11,52 @@
                 "--oslib=semihost",
                 "-I./Source",
                 "-ggdb3",
-                "-march=rv32imac",
+                "-march=rv32imac_zicsr",
                 "-mabi=ilp32",
                 "${file}",
                 "-O0",
                 "./Source/Tics.cpp",
-                "./Source/Target/${config:tics.targetPlatform}/Target.cpp",
-                "./Source/Target/${config:tics.targetPlatform}/Target.s",
+                "./Source/Target/${config:riscv32TargetPlatform}/Target.cpp",
+                "./Source/Target/${config:riscv32TargetPlatform}/Target.s",
                 "-o",
                 "./Bin/Main.elf",
-                "&&", "echo", "go", ">", "./Bin/qemu_trigger"
+                "&&",
+                "echo",
+                "go",
+                ">",
+                "./Bin/qemu_trigger"
             ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Tics for Linux Host",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-m32",
+                "-std=c++11",
+                "-I./Source",
+                "-I/usr/include",
+                "-ggdb3",
+                "${file}",
+                "-O0",
+                "./Source/Tics.cpp",
+                "./Source/Target/${config:x86TargetPlatform}/Target.cpp",
+                "./Source/Target/${config:x86TargetPlatform}/Target.s",
+                "-o",
+                "./Bin/TicsLinuxTest",
+                "-pthread"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
         }
     ]
 }

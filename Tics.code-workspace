@@ -9,6 +9,8 @@
 			"*.hpp": "cpp",
 			"*.cpp": "cpp",
 			"iostream": "cpp"
-		}
+		},
+		"riscv32TargetPlatform": "Riscv32",
+		"x86TargetPlatform": "x86_32"
 	}
 }
