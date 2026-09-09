@@ -76,7 +76,7 @@ extern "C" TimerTickType GetSystemTickCount();
 //-----------------------------------------------------------------------------
 // Macros
 //-----------------------------------------------------------------------------
-#define InRange(minValue, maxValue, value) (value <= maxValue && value >= minValue)
+#define InRange(minValue, maxValue, value) ((value) <= (maxValue) && (value) >= (minValue))
 
 //-----------------------------------------------------------------------------
 // General enums
@@ -84,9 +84,6 @@ extern "C" TimerTickType GetSystemTickCount();
 
 enum TicsNamespaceEnum
 {
-    // The number of IsrFifo slots.
-    NumIsrFifoSlots = 16,
-
     // The maximum number of characters allowed in a string, including a
     // terminating 0.
     MaxNumStringChars = 32,
@@ -202,7 +199,7 @@ enum MsgNumEnum
     // Minimum allowed user msg number.
     MinUserMsgNum = 1000,
 
-    // Maximum allowed user number.
+    // Maximum allowed user msg number.
     MaxUserMsgNum = 9999
 };
 
@@ -507,7 +504,7 @@ class ListClass : public TicsBaseClass
     // The maximum number of nodes allowed in the list.
     int MaxNodes;
 
-    // The head of the list. THe head does not contain data.
+    // The head of the list. The head does not contain data.
     NodeClass ActualHead;
 
     // The tail of the list. The tail does not contain data.
@@ -609,7 +606,7 @@ class TaskListClass : public ListClass
     // Return true if the task with the indicated id exists.
     bool TaskExists(int taskId);
 
-    // Returns a pointer the task with the indicated name.
+    // Returns a pointer to the task with the indicated name.
     TaskClass *GetTaskPointer(const char *name);
 };
 
@@ -649,7 +646,7 @@ class StackClass : public TicsBaseClass
     {
 
         // Default stack size.
-        DefaultStackSizeInBytes = (1024 * 2),
+        DefaultStackSizeInBytes = (1024 * 4),
 
         // The pad is a warning area at the end of stack memory.
         DefaultStackPadSizeInBytes = 128,
@@ -1177,7 +1174,7 @@ void Send(TaskClass *task, FifoClass *fifo, void *data);
 /// IsrPacketClass
 ///
 /// Defines the format of the isr packet which is used to send deferred interrupt
-/// processing data from an isr to the IsrFifo.
+/// processing data from an isr to the InterfaceFifo.
 //-----------------------------------------------------------------------------
 class IsrPacketClass
 {

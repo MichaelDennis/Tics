@@ -1,0 +1,19 @@
+To debug the Arm32 test program using the QEMU ARM simulator, do the following:
+
+1. Click the debug icon in the left VS Code pane.
+2. At the top of the left pane click to tiny "v" icon.
+3. From the dropdown menu, select: Debug Arm32 Arm Baseline.
+4. In the WSL cmd window go to folder ~/projects/Tics/Source/Target/Arm32.
+5. Run the cmd below that starts with "arm-none-eabi-g++"
+6. Now run the cmd below that starts with "qemu-system-arm"
+7. In the current folder, open this file in the editor: Main.cpp.
+8. Now press F5 to start the Debugger.
+9. The Debugger will come up in main() and stop.
+10. Press F5 to continue or F10 to single step.
+
+Newset build command for Tics/Source/Target/Arm32
+arm-none-eabi-g++ -mcpu=cortex-m3 -mthumb -O0 --specs=nano.specs --specs=nosys.specs -I../..  -ggdb3 -T./mps2_an385.ld ./Main.cpp ../../Tics.cpp ./Target.cpp ./Target.s -o ./ArmTest.elf
+
+To fire up QEMU:
+qemu-system-arm -machine mps2-an385 -cpu cortex-m3 -nographic -kernel ArmTest.elf -s -S
+

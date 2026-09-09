@@ -131,6 +131,9 @@ int main()
     TaskA = new TaskAClass();
     TaskB = new TaskBClass();
 
+    TaskA->Name = "TaskA";
+    TaskB->Name = "TaskB";
+
     // Start tasking.
     Suspend();
 

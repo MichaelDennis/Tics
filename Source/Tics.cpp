@@ -108,9 +108,6 @@ IdleTaskClass IdleTask("IdleTask");
 // Isr's and external CPUs schedule tasks to run by adding them to this fifo.
 FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 
-// Isr's add an entry to this fifo to defer non-critical isr processing to a task.
-FifoClass IsrFifo(sizeof(IsrPacketClass), NumIsrFifoSlots);
-
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
@@ -1128,7 +1125,7 @@ TaskClass::~TaskClass()
         ErrorHandler.Report(ErrorAttemptToDeleteANonExistentTask);
     }
 
-    // Although a task can delete itself, we recommend against it.Have another task delete it.
+    // Although a task can delete itself, we recommend against it. Have another task delete it.
     if (CurrentTask == this)
     {
         ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
@@ -1333,7 +1330,7 @@ MsgClass *TaskClass::Recv(int *msgNumArray, int numMsgs)
         }
     }
 
-    // No msgs in the MsgNumArray were found. Return a null pointer.
+    // No msgs were found. Return a null pointer.
     return 0;
 }
 
@@ -2595,7 +2592,7 @@ bool TaskClass::UserPriorityIsValid(int priority)
         return true;
     }
 
-    // SO, this is a user task, which means that its priority must be in the range below.
+    // So, this is a user task, which means that its priority must be in the range below.
     return InRange(LowPriority, HighPriority, priority);
 }
 
@@ -2610,9 +2607,9 @@ bool TaskClass::UserPriorityIsValid(int priority)
 /// need that actual task pointer to send the msg to, so, those tasks
 /// that will receive isr or remote processor msgs, must invoke the task
 /// constructor with the task name as the first arg. All task names
-// must be unique. For example:HelloTask = new HelloTaskClass("Hello");
+// must be unique. For example: HelloTask = new HelloTaskClass("Hello");
 ///
-/// \returns Returns true if the user priority is valid, false otherwise.
+/// \returns Returns a pointer to the task object with the indicated name.
 //-----------------------------------------------------------------------------
 TaskClass *TaskListClass::GetTaskPointer(const char *name)
 {

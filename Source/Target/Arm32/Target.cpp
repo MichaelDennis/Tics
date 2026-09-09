@@ -1,51 +1,113 @@
-//-----------------------------------------------------------------------------
-// ARM 32 cmd line compile and link. Execute cmd from the Tics folder.
-//
-// arm-none-eabi-g++ -I./Source -g -march=armv7-a -marm -O0 ./Source/Tics.cpp ./Source/Target/Arm32/Target.cpp ./Source/Target/Arm32/Target.s ./Examples/Hello.cpp -o ./Bin/Hello_Arm32.elf --specs=nosys.specs -Wl,--no-warnings
-//-----------------------------------------------------------------------------
+#include "Tics.hpp"
+#include <stdint.h>
+#include <sys/types.h>
 
-#include "Tics.hpp" 
-#include <cstdint>
+// ARM Cortex-M3 SysTick Peripheral Memory-Mapped Registers
+#define SCS_BASE_ADDR (0xE000E000UL)
+#define SYSTICK_BASE_ADDR (SCS_BASE_ADDR + 0x0010UL)
 
-extern "C" void TrampolineToErrorHandler();
-extern "C" void TrampolineToNewTask();
+typedef struct
+{
+    volatile uint32_t CTRL;  // Control and Status Register
+    volatile uint32_t LOAD;  // Reload Value Register
+    volatile uint32_t VAL;   // Current Value Register
+    volatile uint32_t CALIB; // Calibration Register
+} SysTick_MemMap_t;
 
-namespace TicsNameSpace {
+#define SysTick_Peripheral ((SysTick_MemMap_t *)SYSTICK_BASE_ADDR)
 
-// Pure 32-bit ARM hardware timer variable tracking
-volatile uint32_t Tics_Arm32TimerTicks = 0;
+// SysTick Control Register bit masks
+#define SYSTICK_ENABLE (1UL << 0)
+#define SYSTICK_TICKINT (1UL << 1)
+#define SYSTICK_CLKSOURCE (1UL << 2)
 
-TimerTickType GetSystemTickCount() {
-    return (TimerTickType) Tics_Arm32TimerTicks;
+// Assuming 25 MHz CPU clock for QEMU mps2-an385 (25,000,000 / 1000 = 25,000 ticks per ms)
+#define CPU_CLOCK_HZ 25000000UL
+#define SYSTICK_RELOAD_1MS ((CPU_CLOCK_HZ / 1000UL) - 1UL)
+
+// System tick counter state
+static volatile TimerTickType g_systemTickCount = 0;
+
+extern "C"
+{
+    // C Externals expected by Tics core and Target.s
+    void TimerTickIsr(void) { g_systemTickCount++; }
+
+    TimerTickType GetSystemTickCount(void) { return g_systemTickCount; }
+
+    // POSIX Stubs for newlib (warning-free overrides)
+    int _kill(int pid, int sig)
+    {
+        (void)pid;
+        (void)sig;
+        return -1;
+    }
+
+    int _getpid(void) { return 1; }
+
+    caddr_t _sbrk(int incr)
+    {
+        (void)incr;
+        return (caddr_t)0; // Signal out-of-memory: Tics is static-only
+    }
+
+    int _close(int file)
+    {
+        (void)file;
+        return -1;
+    }
+    int _lseek(int file, int ptr, int dir)
+    {
+        (void)file;
+        (void)ptr;
+        (void)dir;
+        return -1;
+    }
+    int _read(int file, char *ptr, int len)
+    {
+        (void)file;
+        (void)ptr;
+        (void)len;
+        return -1;
+    }
+    int _write(int file, char *ptr, int len)
+    {
+        (void)file;
+        (void)ptr;
+        (void)len;
+        return -1;
+    }
+
+    // Hardware Tick Initialization Function
+    void Target_SysTick_Init(void)
+    {
+        SysTick_Peripheral->CTRL = 0;                  // Disable SysTick during setup
+        SysTick_Peripheral->LOAD = SYSTICK_RELOAD_1MS; // Set reload for 1ms intervals
+        SysTick_Peripheral->VAL = 0;                   // Clear current counter value
+        SysTick_Peripheral->CTRL =
+            SYSTICK_ENABLE | SYSTICK_TICKINT |
+            SYSTICK_CLKSOURCE; // Enable counter, interrupt, and processor clock source
+    }
 }
 
-void StackClass::PrimeStack() {
-    // 1. Start at the absolute top of the allocated stack memory
-    StackType rawSp = (StackType) StackTop;
+namespace TicsNameSpace
+{
 
-    // 2. Force the starting address to a multiple of 16 per AAPCS alignment rules
-    rawSp &= SixteenByteBoundaryMask;
-    StackTop = (StackType *) rawSp;
-    StackType *sp = (StackType *) rawSp;
+void StackClass::PrimeStack()
+{
+    StackType *sp = (StackType *)((StackType)StackTop & ~7U);
 
-    // 3. Target execution vector popped straight into pc
-    *(--sp) = (StackType) (uintptr_t) TrampolineToNewTask;      
-    
-    // 4. Becomes active Link Register (lr) for task termination catching
-    *(--sp) = (StackType) (uintptr_t) TrampolineToErrorHandler;  
-    
-    // 5. Push fake preserved registers matching the 8 Core ARM 'ldmfd' steps (r4-r11)
-    *(--sp) = 11; // Fake r11
-    *(--sp) = 10; // Fake r10
-    *(--sp) = 9;  // Fake r9
-    *(--sp) = 8;  // Fake r8
-    *(--sp) = 7;  // Fake r7
-    *(--sp) = 6;  // Fake r6
-    *(--sp) = 5;  // Fake r5
-    *(--sp) = 4;  // Fake r4
+    *(--sp) = (StackType)&TrampolineToNewTask;
+    *(--sp) = 11;
+    *(--sp) = 10;
+    *(--sp) = 9;
+    *(--sp) = 8;
+    *(--sp) = 7;
+    *(--sp) = 6;
+    *(--sp) = 5;
+    *(--sp) = 4;
 
-    // Save the finalized stack pointer position back for scheduler allocation
-    SavedSp = sp;
+    SavedSp = (StackType *)sp;
     return;
 }
 

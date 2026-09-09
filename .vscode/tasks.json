@@ -47,11 +47,41 @@
                 "${file}",
                 "-O0",
                 "./Source/Tics.cpp",
-                "./Source/Target/${config:x86TargetPlatform}/Target.cpp",
-                "./Source/Target/${config:x86TargetPlatform}/Target.s",
+                "./Source/Target/x86_32/Target.cpp",
+                "./Source/Target/x86_32/Target.s",
                 "-o",
                 "./Bin/TicsLinuxTest",
                 "-pthread"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Tics for ARM and Boot QEMU",
+            "type": "shell",
+            "command": "arm-none-eabi-g++",
+            "args": [
+                "-fno-exceptions",
+                "-mcpu=cortex-m3",
+                "-mthumb",
+                "--specs=nano.specs",
+                "-T./Source/Target/ArmThumb/mps2_an385.ld",
+                "-I./Source",
+                "-ggdb3",
+                "${file}",
+                "-O0",
+                "./Source/Tics.cpp",
+                "./Source/Target/ArmThumb/Target.cpp",
+                "./Source/Target/ArmThumb/Target.s",
+                "-o",
+                "./Bin/Main.elf",
+                "&&",
+                "echo",
+                "go",
+                ">",
+                "./Bin/qemu_trigger"
             ],
             "group": "build",
             "problemMatcher": [
