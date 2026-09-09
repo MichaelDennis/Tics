@@ -292,6 +292,13 @@ void TaskClass::Suspend(void)
         NextTask = &IdleTask;
     }
 
+    // If the next task is the current task, then no need to do a context switch, just return.
+    if (CurrentTask == NextTask)
+    {
+        // Return and continue where the current task left off.
+        return;
+    }
+
     // Switch to NextTask.
     TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp, CurrentTask,
                NextTask);

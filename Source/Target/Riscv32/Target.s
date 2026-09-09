@@ -36,34 +36,8 @@ TaskSwitch:
     sw   sp, 0(a0)        
 
     # -------------------------------------------------------------------------
-    # 2.1 If the CurrentTask and NextTask are the same, then the SavedSp 
-    # of NextTask, that was passed to this function as a1 will be incorrect 
-    # because this function moves the sp down to save the CurrentTask's 
-    # registers. 
-    #
-    # So, in the code below, if the CurentTask's address (a2) is not the 
-    # same as the NextTask's address a3, then no adjustment to NextTask's 
-    # SavedSp is required, and the adjustment of NexTask's SavedSp is skipped. 
-    #
-    # However, if CurrentTask and NextTask are the same, we must update the 
-    # value of NextTask's SaveSp, which is stored in register a1, so that the 
-    # restore of NextTask's registers is done correctly.
-    #
-    # Notes: (1) When CurrentTask and NextTask are the same, a reference to 
-    # CurrentTask or NextTask is a reference to the same task. (2) The main
-    # way in which CurrentTask and NextTask are the same is when there is
-    # only one user task in the system, and its task loop simply contains
-    # a call to Yield(). In that case, the task being swapped out and the
-    # task being swapped in are the same.
+    # 2.1 Update NextTask's SavedSp prior to restoring its registers.
     # -------------------------------------------------------------------------
-   # If currentTask (a2) and nextTask (a3) pointers are different, then skip the adjustment.
-    bne  a2, a3, skipNextTaskSavedSpUpdate
-
-    # Adjust NextTask->SavedSp for the case where we are switching back to the same task.
-    lw   a1, 0(a0)        
-
-skipNextTaskSavedSpUpdate:
-    # In either case, we update NextTask's SavedSp prior to restoring its registers.
     mv   sp, a1           
 
     # -------------------------------------------------------------------------

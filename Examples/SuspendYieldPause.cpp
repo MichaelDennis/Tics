@@ -38,7 +38,7 @@
 //-----------------------------------------------------------------------------
 enum
 {
-    LenTaskC = 20
+    LenTaskC = 1
 };
 
 //-----------------------------------------------------------------------------
@@ -108,6 +108,8 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
+    int i = 0;
+
     while (true)
     {
         // Send a msg to TaskA to request a msg to wake us up after the Suspend() call.
@@ -122,7 +124,7 @@ void TaskBClass::Task()
         Wait(GrantMsg);
 
         // If we get to here, then someone sent us a msg, or scheduled us.
-        cout << "Someone woke up TaskB.  ";
+        cout << "Someone woke up TaskB.  " << endl;
 
         // Yield() lets other tasks run, after which this task will resume.
         // (That's assuming all tasks and msgs are at the same priority.)
@@ -145,7 +147,7 @@ void TaskBClass::Task()
         // Pause is not meant to be used for precise timing. It is good for timing
         // applications that don't require precision (polling a keypad for example).
 
-        cout << "Pausing for 1 second.  ";
+        cout << "Pausing for 1 second.  " << i++ << endl;
 
         Pause(1000);
     }
@@ -163,7 +165,7 @@ void TaskCClass::Task()
         if (Name[0] == '1' && Name[1] == '9' && (++i % 1000) == 0)
         {
             // Test.
-            cout << Name << " ";
+            cout << Name << " " << endl;
         }
 
         // Test.
