@@ -96,11 +96,6 @@ TicsSystemTaskClass TicsSystemTask;
 // set to NextTask immediately after the context switch.
 TaskClass *NextTask = 0;
 
-StartupTaskClass StartupTask("StartupTask", MediumPriority, 0);
-
-// Pointer to the task that is currently running. Initially we point it to a dummy task.
-TaskClass *CurrentTask = &StartupTask;
-
 // This task runs when no other tasks are ready to run (it's priority is lower than any user or
 // system task).
 IdleTaskClass IdleTask("IdleTask");
@@ -110,6 +105,12 @@ FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
+
+// The StartupTask is a dummy task that serves as CurrentTask during the first TaskSwitch.
+StartupTaskClass StartupTask("StartupTask", MediumPriority, 0);
+
+// Pointer to the task that is currently running. Initially we point it to a dummy task.
+TaskClass *CurrentTask = &StartupTask;
 
 // Adds the task to the ReadyList or InterefaceFifo.
 void Schedule(TaskClass *task, bool inIsr = false);
@@ -225,7 +226,11 @@ void StackClass::Check(void)
 //-----------------------------------------------------------------------------
 /// \brief Adds a TaskClass instance to the TaskList.
 //-----------------------------------------------------------------------------
-void TaskListClass::Add(TaskClass *task) { ListClass::Add((NodeClass *)task); }
+void TaskListClass::Add(TaskClass *task)
+{
+    // Add the noe to the list.
+    ListClass::Add((NodeClass *)task);
+}
 
 //-----------------------------------------------------------------------------
 /// \brief Perform various things that need to be done prior to performing
@@ -1207,7 +1212,6 @@ void TaskClass::DeleteFromMsgList(TaskClass *task)
 ///
 /// \param numTicks - The number of ticks to wait before the msg is sent to
 /// this task.
-///
 /// \param priority - The priority of the msg.
 /// \param msgNum - The msg number of the msg.
 //-----------------------------------------------------------------------------
@@ -1294,13 +1298,15 @@ MsgClass *TaskClass::Recv(int msgNum)
         }
         else
         {
-            // Drop the unexpected msg if so enabled.
+            // Drop the unexpected msg if so enabled, otherwise take no action
+            // and keep the msg in the MsgList for later processing.
             if (Flags.IsSet(DropUnexpectedMsgsFlag))
             {
-                // Remove the msg to drop.
+                // Remove the unexpected msg from the msg list.
                 MsgList.Remove(msg);
-                // Delete the msg.
-                delete msg;
+
+                // Mark the msg for deletion.
+                DeleteList.Add(msg);
             }
         }
     }
@@ -1425,11 +1431,11 @@ MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 ///
 /// Attempt to remove a previously sent msg with the given node Id from the system.
 ///
-/// \param nodeId - Obtainable from the msg returned by Send() (msg->Id).
+/// \param id - Obtainable from the msg returned by Send() (msg->Id).
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
-bool TaskClass::Cancel(MsgClass *msg, int nodeId)
+bool TaskClass::Cancel(MsgClass *msg, int id)
 {
     // Check for a null msg pointer.
     if (msg == 0)
@@ -1450,22 +1456,22 @@ bool TaskClass::Cancel(MsgClass *msg, int nodeId)
     // lists. If the msg has not been found in any of these, false is returned.
 
     // Check the receiver task's msg list.
-    if (msgList->Delete(nodeId))
+    if (msgList->Delete(id))
     {
         return true;
     }
     // Check the Delay List.
-    else if (DelayList.Delete(nodeId))
+    else if (DelayList.Delete(id))
     {
         return true;
     }
     // Check the Ready List.
-    else if (ReadyList.Delete(nodeId))
+    else if (ReadyList.Delete(id))
     {
         return true;
     }
     // Check the Delete List.
-    else if (DeleteList.Delete(nodeId))
+    else if (DeleteList.Delete(id))
     {
         return true;
     }
@@ -1706,12 +1712,9 @@ bool TaskClass::TaskExists(TaskClass *receiver)
 /// \brief The StartupTask constructor.
 //-----------------------------------------------------------------------------
 StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags)
-    : TaskClass(name, priority, flags)
-{
-    // This is a dummy task used for startup. We just need the task object. We don't
-    // Want to run it.
-    ClrFlag(ScheduleTaskOnCreationFlag);
-};
+    : TaskClass(name, priority, flags) {
+
+      };
 
 //-----------------------------------------------------------------------------
 /// \brief The StartupTask.

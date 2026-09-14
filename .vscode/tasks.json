@@ -50,8 +50,7 @@
                 "./Source/Target/x86_32/Target.cpp",
                 "./Source/Target/x86_32/Target.s",
                 "-o",
-                "./Bin/TicsLinuxTest",
-                "-pthread"
+                "./Bin/TicsLinuxTest"
             ],
             "group": "build",
             "problemMatcher": [
