@@ -112,7 +112,7 @@ StartupTaskClass StartupTask("StartupTask", MediumPriority, 0);
 // Pointer to the task that is currently running. Initially we point it to a dummy task.
 TaskClass *CurrentTask = &StartupTask;
 
-// Adds the task to the ReadyList or InterefaceFifo.
+// Adds the task to the ReadyList or InterfaceFifo.
 void Schedule(TaskClass *task, bool inIsr = false);
 
 //-----------------------------------------------------------------------------
@@ -1725,6 +1725,9 @@ StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags)
 //-----------------------------------------------------------------------------
 void StartupTaskClass::Task()
 {
+    // Initialize the hardware timer.
+    // MDM TargetInit();
+
     while (true)
     {
         // Suspend this task and never return.

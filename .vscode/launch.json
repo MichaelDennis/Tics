@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Connect GDB to QEMU",
+            "name": "Debug Tics RISC-V32 (Virt)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/Main.elf",
@@ -11,10 +11,10 @@
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
-            "preLaunchTask": "Build Tics and Boot QEMU"
+            "preLaunchTask": "Build Tics RISC-V32 (Virt)"
         },
         {
-            "name": "Connect ARM GDB to QEMU",
+            "name": "Debug Tics ARM32_old (MPS2-AN385)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/Main.elf",
@@ -22,7 +22,7 @@
             "miDebuggerPath": "gdb-multiarch",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
-            "preLaunchTask": "Build Tics for ARM and Boot QEMU",
+            "preLaunchTask": "Build Tics ARM32 (MPS2-AN385)",
             "setupCommands": [
                 {
                     "text": "set architecture arm",
@@ -40,7 +40,30 @@
             ]
         },
         {
-            "name": "Debug Tics on Linux Host (x86_32)",
+            "name": "Debug Tics ARM32 (MPS2-AN385)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Bin/Main.elf",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb-multiarch",
+            "miDebuggerServerAddress": "127.0.0.1:1234",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true,
+            "preLaunchTask": "Build Tics ARM32 (MPS2-AN385)",
+            "setupCommands": [
+                {
+                    "text": "set architecture arm",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug Tics x86_32 (Native)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/TicsLinuxTest",
@@ -48,7 +71,7 @@
             "miDebuggerPath": "gdb",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
-            "preLaunchTask": "Build Tics for Linux Host",
+            "preLaunchTask": "Build Tics x86_32 (Native)",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
@@ -67,45 +90,6 @@
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}/Sandbox/ArmTest",
             "stopAtEntry": true
-        },
-        {
-            "name": "Debug Arm32 ARM Baseline",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Source/Target/Arm32/ArmTest.elf",
-            "MIMode": "gdb",
-            "miDebuggerPath": "gdb-multiarch",
-            "miDebuggerServerAddress": "127.0.0.1:1234",
-            "cwd": "${workspaceFolder}/Source/Target/Arm32",
-            "stopAtEntry": true
-        },
-        {
-            "name": "Debug Tics ArmSimulated",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Sandbox/ArmTest/ArmSimulated/ArmTest.elf",
-            "MIMode": "gdb",
-            "targetArchitecture": "arm",
-            "miDebuggerPath": "gdb-multiarch",
-            "cwd": "${workspaceFolder}/Sandbox/ArmTest/ArmSimulated",
-            "stopAtEntry": true,
-            "customLaunchSetupCommands": [
-                {
-                    "text": "set architecture arm",
-                    "ignoreFailures": false
-                },
-                {
-                    "text": "target remote | qemu-arm -g 1234 -semihosting ${workspaceFolder}/Sandbox/ArmTest/ArmSimulated/ArmTest.elf",
-                    "ignoreFailures": false
-                }
-            ],
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
         }
     ]
 }

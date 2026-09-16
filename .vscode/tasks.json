@@ -2,29 +2,29 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Tics and Boot QEMU",
+            "label": "Build Tics RISC-V32 (Virt)",
             "type": "shell",
             "command": "riscv64-unknown-elf-g++",
             "args": [
                 "-fno-exceptions",
                 "--specs=picolibc.specs",
                 "--oslib=semihost",
-                "-I./Source",
+                "-I${workspaceFolder}/Source",
                 "-ggdb3",
                 "-march=rv32imac_zicsr",
                 "-mabi=ilp32",
-                "${file}",
                 "-O0",
-                "./Source/Tics.cpp",
-                "./Source/Target/${config:riscv32TargetPlatform}/Target.cpp",
-                "./Source/Target/${config:riscv32TargetPlatform}/Target.s",
+                "${file}",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/${config:riscv32TargetPlatform}/Target.cpp",
+                "${workspaceFolder}/Source/Target/${config:riscv32TargetPlatform}/Target.s",
                 "-o",
-                "./Bin/Main.elf",
+                "${workspaceFolder}/Bin/Main.elf",
                 "&&",
                 "echo",
-                "go",
+                "riscv32",
                 ">",
-                "./Bin/qemu_trigger"
+                "${workspaceFolder}/Bin/qemu_trigger"
             ],
             "group": {
                 "kind": "build",
@@ -35,52 +35,58 @@
             ]
         },
         {
-            "label": "Build Tics for Linux Host",
+            "label": "Build Tics ARM32 (MPS2-AN385)",
+            "type": "shell",
+            "command": "arm-none-eabi-g++",
+            "args": [
+                "-mcpu=cortex-m3",
+                "-mthumb",
+                "-O0",
+                "--specs=nano.specs",
+                "--specs=nosys.specs",
+                "-ggdb3",
+                "-I${workspaceFolder}/Source",
+                "-T${workspaceFolder}/Source/Target/Arm32/mps2_an385.ld",
+                "${file}",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/Arm32/Target.cpp",
+                "${workspaceFolder}/Source/Target/Arm32/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/Main.elf",
+                "&&",
+                "echo",
+                "arm32",
+                ">",
+                "${workspaceFolder}/Bin/qemu_trigger"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build Tics x86_32 (Native)",
             "type": "shell",
             "command": "g++",
             "args": [
                 "-m32",
                 "-std=c++11",
-                "-I./Source",
+                "-I${workspaceFolder}/Source",
                 "-I/usr/include",
                 "-ggdb3",
-                "${file}",
                 "-O0",
-                "./Source/Tics.cpp",
-                "./Source/Target/x86_32/Target.cpp",
-                "./Source/Target/x86_32/Target.s",
-                "-o",
-                "./Bin/TicsLinuxTest"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "Build Tics for ARM and Boot QEMU",
-            "type": "shell",
-            "command": "arm-none-eabi-g++",
-            "args": [
-                "-fno-exceptions",
-                "-mcpu=cortex-m3",
-                "-mthumb",
-                "--specs=nano.specs",
-                "-T./Source/Target/ArmThumb/mps2_an385.ld",
-                "-I./Source",
-                "-ggdb3",
                 "${file}",
-                "-O0",
-                "./Source/Tics.cpp",
-                "./Source/Target/ArmThumb/Target.cpp",
-                "./Source/Target/ArmThumb/Target.s",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/x86_32/Target.cpp",
+                "${workspaceFolder}/Source/Target/x86_32/Target.s",
                 "-o",
-                "./Bin/Main.elf",
-                "&&",
-                "echo",
-                "go",
-                ">",
-                "./Bin/qemu_trigger"
+                "${workspaceFolder}/Bin/TicsLinuxTest"
             ],
             "group": "build",
             "problemMatcher": [

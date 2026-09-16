@@ -1169,6 +1169,7 @@ bool DelayIsCorrect(TimerTickType delay);
 void TrampolineToErrorHandler();
 void TrampolineToNewTask();
 void Send(TaskClass *task, FifoClass *fifo, void *data);
+void TargetInit();
 
 //-----------------------------------------------------------------------------
 /// IsrPacketClass

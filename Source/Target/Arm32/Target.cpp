@@ -111,4 +111,10 @@ void StackClass::PrimeStack()
     return;
 }
 
+void TargetInit()
+{
+    // Initialize the timer.
+    Target_SysTick_Init();
+}
+
 } // namespace TicsNameSpace
