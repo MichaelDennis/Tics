@@ -136,10 +136,15 @@ void HelloTaskClass::Task(void)
     int i = 0;
 
     // The task body is always an infinite loop.
-
     while (true)
     {
         i++;
+
+        // Debug. Delete.
+        if (i > 3)
+        {
+            break;
+        }
 
         // Output the string "Hello World!World.cpp" followed by a counter value.
         // MDM cout << "Hello World! " << i++ << endl;
@@ -153,19 +158,18 @@ void HelloTaskClass::Task(void)
 // Create HelloTask and start tasking.
 //-----------------------------------------------------------------------------
 
-extern "C" void Target_SysTick_Init(void);
+// MDM void TicsNameSpace::Target_SysTick_Init();
 
 int main()
 {
-    // Init the ARM Timer.
-    Target_SysTick_Init();
-
     // Create the hello task.
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.
     Suspend();
 
-    // We will never get here.
+    // We should never get here.
+    ErrorHandler.Report(ErrorMsgAttemptToReturnFromMain);
+
     return 0;
 }

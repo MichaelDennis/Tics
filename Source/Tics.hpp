@@ -299,6 +299,7 @@ enum ErrorMsgEnum
     ErrorMsgMaxNumCharsIsZeroInMemCompare = 1085,
     ErrorMsgNoMatchForTaskName = 1086,
     ErrorMsgAttemptToReturnFromATask = 1087,
+    ErrorMsgAttemptToReturnFromMain = 1088,
 };
 
 //-----------------------------------------------------------------------------
@@ -927,6 +928,21 @@ class IdleTaskClass : public TaskClass
     void Task();
 };
 
+class DummyTaskClass : public TaskClass
+{
+  public:
+    // Functions
+
+    // Constructor.
+    DummyTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0)
+        : TaskClass(name, priority, flags)
+    {
+    }
+
+    // Task function.
+    void Task() {}
+};
+
 //-----------------------------------------------------------------------------
 // StartupTaskClass
 //
@@ -941,7 +957,10 @@ class StartupTaskClass : public TaskClass
     // Functions
 
     // Constructor.
-    StartupTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0);
+    StartupTaskClass(const char *name = 0, int priority = MediumPriority)
+        : TaskClass(name, priority)
+    {
+    }
 
     // Task function.
     void Task();
@@ -1170,6 +1189,7 @@ void TrampolineToErrorHandler();
 void TrampolineToNewTask();
 void Send(TaskClass *task, FifoClass *fifo, void *data);
 void TargetInit();
+// MDM void Target_SysTick_Init();
 
 //-----------------------------------------------------------------------------
 /// IsrPacketClass

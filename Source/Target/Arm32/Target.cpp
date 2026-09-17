@@ -77,21 +77,21 @@ extern "C"
         (void)len;
         return -1;
     }
-
-    // Hardware Tick Initialization Function
-    void Target_SysTick_Init(void)
-    {
-        SysTick_Peripheral->CTRL = 0;                  // Disable SysTick during setup
-        SysTick_Peripheral->LOAD = SYSTICK_RELOAD_1MS; // Set reload for 1ms intervals
-        SysTick_Peripheral->VAL = 0;                   // Clear current counter value
-        SysTick_Peripheral->CTRL =
-            SYSTICK_ENABLE | SYSTICK_TICKINT |
-            SYSTICK_CLKSOURCE; // Enable counter, interrupt, and processor clock source
-    }
 }
 
 namespace TicsNameSpace
 {
+
+// Hardware Tick Initialization Function
+void Target_SysTick_Init()
+{
+    SysTick_Peripheral->CTRL = 0;                  // Disable SysTick during setup
+    SysTick_Peripheral->LOAD = SYSTICK_RELOAD_1MS; // Set reload for 1ms intervals
+    SysTick_Peripheral->VAL = 0;                   // Clear current counter value
+    SysTick_Peripheral->CTRL =
+        SYSTICK_ENABLE | SYSTICK_TICKINT |
+        SYSTICK_CLKSOURCE; // Enable counter, interrupt, and processor clock source
+}
 
 void StackClass::PrimeStack()
 {

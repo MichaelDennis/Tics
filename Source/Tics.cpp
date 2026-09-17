@@ -106,11 +106,14 @@ FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
-// The StartupTask is a dummy task that serves as CurrentTask during the first TaskSwitch.
-StartupTaskClass StartupTask("StartupTask", MediumPriority, 0);
+// Dummy task used as the CurrentTask when the first task after power-on is run.
+DummyTaskClass DummyTask("DummyTask)");
 
 // Pointer to the task that is currently running. Initially we point it to a dummy task.
-TaskClass *CurrentTask = &StartupTask;
+TaskClass *CurrentTask = &DummyTask;
+
+// The StartupTask is a dummy task that serves as CurrentTask during the first TaskSwitch.
+StartupTaskClass StartupTask("StartupTask");
 
 // Adds the task to the ReadyList or InterfaceFifo.
 void Schedule(TaskClass *task, bool inIsr = false);
@@ -1709,14 +1712,6 @@ bool TaskClass::TaskExists(TaskClass *receiver)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief The StartupTask constructor.
-//-----------------------------------------------------------------------------
-StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags)
-    : TaskClass(name, priority, flags) {
-
-      };
-
-//-----------------------------------------------------------------------------
 /// \brief The StartupTask.
 ///
 /// This is a dummy task for sole purpose of a task to serve as the
@@ -1725,8 +1720,8 @@ StartupTaskClass::StartupTaskClass(const char *name, int priority, int flags)
 //-----------------------------------------------------------------------------
 void StartupTaskClass::Task()
 {
-    // Initialize the hardware timer.
-    // MDM TargetInit();
+    // Initialize the target hardware.
+    TargetInit();
 
     while (true)
     {
@@ -2655,11 +2650,12 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 /// Trampoline Functions
 ///
 /// A task is started by pushing its start address onto its stack, and popping
-/// it off the task when it is its turn to run. However, since each stack slot
-/// can hold only one word, an address like MyTask.Task() will not fit, since
-/// it is 2 words in size. To solve this problem, we prime the task's stack
-/// with a C function instead, which is only one word, and call the MyTask.
-/// Task() from within the C function.
+/// it off the stack when it is its turn to run. However, since each stack slot
+/// can hold only one word, an address like MyTask->Task() will not fit, since
+/// it is 2 words in size in C++ To solve this problem, we prime the task's
+/// stack with a C function instead (referred to as the "trampoline" function)
+/// which is only one word in size, and call the C++ member function from within
+/// the trampoline function.
 //-----------------------------------------------------------------------------
 
 void TrampolineToErrorHandler()
@@ -2678,6 +2674,9 @@ void TrampolineToNewTask()
 
     // Start the new task.
     CurrentTask->Task();
+
+    // If we come here, have returned from a task, which is not allowed.
+    ErrorHandler.Report(ErrorMsgAttemptToReturnFromATask);
 }
 
 //-----------------------------------------------------------------------------
