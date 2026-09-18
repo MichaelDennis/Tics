@@ -23,7 +23,9 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
-// Copyright (c) 2026, Tics Realtime (Michael Dennis McDonnell)
+// This file provides the low-level ARM32 Cortex-M3 target specific hardware
+// initializations, timer tracking drivers, and required system stub functions
+// for the Tics RTOS engine.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
@@ -40,111 +42,171 @@ namespace TicsNameSpace
 {
 
 //-----------------------------------------------------------------------------
-// Hardware Layout Enums
+// Enums
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Core register constants and hardware clock metrics for the SysTick module.
 //-----------------------------------------------------------------------------
 enum SysTickPeripheralEnum : uint32_t
 {
+    // The base memory address for the System Control Space.
     ScsBaseAddr = 0xE000E000UL,
-    SystickBaseAddr = (ScsBaseAddr + 0x0010UL),
 
-    // Control Register bit masks
-    SystickEnable = (1UL << 0),
-    SystickTickint = (1UL << 1),
-    SystickClksource = (1UL << 2),
+    // The base memory address for the SysTick peripheral registers.
+    SysTickBaseAddr = (ScsBaseAddr + 0x0010UL),
 
-    // Hardware Frequency Conversions (25 MHz CPU clock for QEMU mps2-an385)
+    // Bit mask to enable the SysTick counter module.
+    SysTickEnable = (1UL << 0),
+
+    // Bit mask to enable the SysTick periodic exception interrupt.
+    SysTickTickInt = (1UL << 1),
+
+    // Bit mask to configure SysTick to use the core processor clock source.
+    SysTickClkSource = (1UL << 2),
+
+    // The running frequency of the CPU clock configuration under QEMU mps2-an385.
     CpuClockHz = 25000000UL,
-    SystickReload1Ms = ((CpuClockHz / 1000UL) - 1UL),
+
+    // The calculated count register value required to trigger a steady 1ms interval tick.
+    SysTickReload1Ms = ((CpuClockHz / 1000UL) - 1UL),
 };
 
 //-----------------------------------------------------------------------------
-// Hardware Register Structure Map
+// Structs
 //-----------------------------------------------------------------------------
-struct SysTick_MemMap_t
+
+//-----------------------------------------------------------------------------
+// Hardware layout mapping block for the Cortex-M3 SysTick core peripheral registers.
+//-----------------------------------------------------------------------------
+struct SysTickMemMap
 {
-    volatile uint32_t CTRL;  // Control and Status Register
-    volatile uint32_t LOAD;  // Reload Value Register
-    volatile uint32_t VAL;   // Current Value Register
-    volatile uint32_t CALIB; // Calibration Register
+    // Control and Status Register.
+    volatile uint32_t ControlStatus;
+
+    // Reload Value Register.
+    volatile uint32_t ReloadValue;
+
+    // Current Value Register.
+    volatile uint32_t CurrentValue;
+
+    // Calibration Register.
+    volatile uint32_t Calibration;
 };
 
-// Pointer mapping directly onto physical microcontroller register memory
-static SysTick_MemMap_t *const SysTick_Peripheral =
-    reinterpret_cast<SysTick_MemMap_t *>(SystickBaseAddr);
-
 //-----------------------------------------------------------------------------
-// Global Target States
-//-----------------------------------------------------------------------------
-static volatile TimerTickType g_systemTickCount = 0;
-
-//-----------------------------------------------------------------------------
-// C++ Target Core Functions
+// Globals
 //-----------------------------------------------------------------------------
 
-void Target_SysTick_Init()
+//-----------------------------------------------------------------------------
+// Statics
+//-----------------------------------------------------------------------------
+
+// Global rolling counter tracking total clock ticks since processor power-on.
+static volatile TimerTickType SystemTickCount = 0;
+
+// Memory pointer targeted directly onto physical peripheral baseline registers.
+static SysTickMemMap *const SysTickPeripheral = (SysTickMemMap *)SysTickBaseAddr;
+
+//-----------------------------------------------------------------------------
+// Functions
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Configures and enables the hardware internal SysTick exception framework.
+//-----------------------------------------------------------------------------
+void TargetSysTickInit()
 {
-    SysTick_Peripheral->CTRL = 0;                // Disable SysTick during setup
-    SysTick_Peripheral->LOAD = SystickReload1Ms; // Set reload for 1ms intervals
-    SysTick_Peripheral->VAL = 0;                 // Clear current counter value
-    SysTick_Peripheral->CTRL = (SystickEnable | SystickTickint | SystickClksource);
+    // Disable SysTick during setup.
+    SysTickPeripheral->ControlStatus = 0;
+
+    // Set reload for 1ms intervals.
+    SysTickPeripheral->ReloadValue = SysTickReload1Ms;
+
+    // Clear current counter value.
+    SysTickPeripheral->CurrentValue = 0;
+
+    // Enable counter, interrupt, and processor clock source.
+    SysTickPeripheral->ControlStatus = (SysTickEnable | SysTickTickInt | SysTickClkSource);
 }
 
-void TargetInit() { Target_SysTick_Init(); }
-
-TimerTickType GetSystemTickCount(void) { return g_systemTickCount; }
+//-----------------------------------------------------------------------------
+// Centralized hardware initialization entry target execution point.
+//-----------------------------------------------------------------------------
+void TargetInit() { TargetSysTickInit(); }
 
 //-----------------------------------------------------------------------------
-/// \brief StackClass::PrimeStack
-///
-/// Sets up initial execution frames on the target process stack layout.
+// Read-interface query layer pulling the safe static runtime clock value.
+//-----------------------------------------------------------------------------
+TimerTickType GetSystemTickCount(void) { return SystemTickCount; }
+
+//-----------------------------------------------------------------------------
+// Classes
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
+// Sets up initial execution frames on the target process stack layout.
 //-----------------------------------------------------------------------------
 void StackClass::PrimeStack()
 {
-    StackType *sp = reinterpret_cast<StackType *>(reinterpret_cast<StackType>(StackTop) & ~7U);
+    // Local stack tracing tracking pointer.
+    StackType *sp = (StackType *)((uintptr_t)StackTop & ~7U);
 
-    *(--sp) = reinterpret_cast<StackType>(&TrampolineToNewTask);
+    *(--sp) = (StackType)&TrampolineToNewTask;
+
     *(--sp) = 11;
+
     *(--sp) = 10;
+
     *(--sp) = 9;
+
     *(--sp) = 8;
+
     *(--sp) = 7;
+
     *(--sp) = 6;
+
     *(--sp) = 5;
+
     *(--sp) = 4;
 
-    SavedSp = reinterpret_cast<StackType *>(sp);
+    SavedSp = (StackType *)sp;
 }
 
 //-----------------------------------------------------------------------------
-// Explicit ISR Interface Hooks (Accessed by Target.s)
+// extern "C"
 //-----------------------------------------------------------------------------
 extern "C"
 {
-    void TimerTickIsr(void) { g_systemTickCount++; }
-}
+    //-----------------------------------------------------------------------------
+    // Periodic clock hardware interrupt execution trap called directly by Target.s.
+    //-----------------------------------------------------------------------------
+    void TimerTickIsr(void) { SystemTickCount++; }
 
-//-----------------------------------------------------------------------------
-// Newlib POSIX System Call Stubs (Satisfying Standard Library Linkage)
-//-----------------------------------------------------------------------------
-extern "C"
-{
+    //-----------------------------------------------------------------------------
+    // Mandatory POSIX low-level system compliance stubs satisfying Newlib linkages.
+    //-----------------------------------------------------------------------------
     int _kill(int pid, int sig)
     {
         (void)pid;
         (void)sig;
         return -1;
     }
+
     int _getpid(void) { return 1; }
+
     caddr_t _sbrk(int incr)
     {
         (void)incr;
-        return reinterpret_cast<caddr_t>(0);
+        return (caddr_t)0;
     }
+
     int _close(int file)
     {
         (void)file;
         return -1;
     }
+
     int _lseek(int file, int ptr, int dir)
     {
         (void)file;
@@ -152,6 +214,7 @@ extern "C"
         (void)dir;
         return -1;
     }
+
     int _read(int file, char *ptr, int len)
     {
         (void)file;
@@ -159,6 +222,7 @@ extern "C"
         (void)len;
         return -1;
     }
+
     int _write(int file, char *ptr, int len)
     {
         (void)file;
@@ -166,6 +230,7 @@ extern "C"
         (void)len;
         return -1;
     }
-}
+
+} // extern "C"
 
 } // namespace TicsNameSpace
