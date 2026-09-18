@@ -14,32 +14,6 @@
             "preLaunchTask": "Build Tics RISC-V32 (Virt)"
         },
         {
-            "name": "Debug Tics ARM32_old (MPS2-AN385)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Bin/Main.elf",
-            "MIMode": "gdb",
-            "miDebuggerPath": "gdb-multiarch",
-            "cwd": "${workspaceFolder}",
-            "stopAtEntry": true,
-            "preLaunchTask": "Build Tics ARM32 (MPS2-AN385)",
-            "setupCommands": [
-                {
-                    "text": "set architecture arm",
-                    "ignoreFailures": false
-                },
-                {
-                    "text": "target remote 127.0.0.1:1234",
-                    "ignoreFailures": false
-                },
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
-        {
             "name": "Debug Tics ARM32 (MPS2-AN385)",
             "type": "cppdbg",
             "request": "launch",

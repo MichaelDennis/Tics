@@ -140,12 +140,6 @@ void HelloTaskClass::Task(void)
     {
         i++;
 
-        // Debug. Delete.
-        if (i > 3)
-        {
-            break;
-        }
-
         // Output the string "Hello World!World.cpp" followed by a counter value.
         // MDM cout << "Hello World! " << i++ << endl;
 
