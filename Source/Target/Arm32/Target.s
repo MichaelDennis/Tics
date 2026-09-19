@@ -59,11 +59,18 @@
 // Vector Table Section (.isr_vector)
 //-----------------------------------------------------------------------------
 .section .isr_vector, "a", %progbits
+
+//-----------------------------------------------------------------------------
+// Vector Attributes
+//-----------------------------------------------------------------------------
 // Declare g_pfnVectors as an object type symbol identifier.
 .type g_pfnVectors, %object
 // Calculate the absolute size footprint of the vector object array.
 .size g_pfnVectors, .-g_pfnVectors
 
+//-----------------------------------------------------------------------------
+// Vector Table
+//-----------------------------------------------------------------------------
 // The primary hardware exception vector table configuration mapping table.
 g_pfnVectors:
     // 0x00: Initial Main Stack Pointer (MSP) top boundary.
