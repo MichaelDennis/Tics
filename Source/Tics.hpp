@@ -62,7 +62,6 @@ typedef unsigned int TimerTickType;
 //-----------------------------------------------------------------------------
 extern "C" void TaskSwitch(void **currentTaskSavedSp, void *newTaskSavedSp, void *currentTask,
                            void *nextTask);
-extern "C" StackType GetStackPointer();
 
 //-----------------------------------------------------------------------------
 /// C Externals
@@ -1185,10 +1184,11 @@ void MemSet(void *dst, int numChars, char data);
 void MemCopy(void *dst, void *src, int numChars);
 void Suspend();
 bool DelayIsCorrect(TimerTickType delay);
-void TrampolineToErrorHandler();
 void TrampolineToNewTask();
 void Send(TaskClass *task, FifoClass *fifo, void *data);
 void TargetInit();
+StackType *GetTaskStackPointer();
+
 // MDM void Target_SysTick_Init();
 
 //-----------------------------------------------------------------------------

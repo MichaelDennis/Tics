@@ -44,7 +44,6 @@ SOFTWARE.
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
 
-void TrampolineToErrorHandler();
 void TrampolineToNewTask();
 
 //-----------------------------------------------------------------------------
@@ -188,7 +187,7 @@ void StackClass::Check(void)
     int unusedStackSizeInBytes;
 
     // Read the current CPU stack pointer.
-    currentSp = (StackType *)GetStackPointer();
+    currentSp = (StackType *)GetTaskStackPointer();
 
     // Check if the stack pointer is within an allowable range.
     if (currentSp < StackBottom)
@@ -2610,12 +2609,9 @@ bool TaskClass::UserPriorityIsValid(int priority)
 /// The task name is a variable length string. It is the first argument
 /// of the TaskClass constructor. You may not have noticed it because
 /// it is an optional arg and defaults to 0, so you probably won't see
-/// it being used in most of the examples. However, isr's or remote
-/// processors that want to communicate with the main Tics processor
-/// need that actual task pointer to send the msg to, so, those tasks
-/// that will receive isr or remote processor msgs, must invoke the task
-/// constructor with the task name as the first arg. All task names
-// must be unique. For example: HelloTask = new HelloTaskClass("Hello");
+/// it being used in most of the examples. It's main use is for isr code
+/// or code that resides in a remote processor that want to send a msg to
+/// a Tics task.
 ///
 /// \returns Returns a pointer to the task object with the indicated name.
 //-----------------------------------------------------------------------------
@@ -2647,8 +2643,6 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-/// Trampoline Functions
-///
 /// A task is started by pushing its start address onto its stack, and popping
 /// it off the stack when it is its turn to run. However, since each stack slot
 /// can hold only one word, an address like MyTask->Task() will not fit, since
@@ -2657,12 +2651,6 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 /// which is only one word in size, and call the C++ member function from within
 /// the trampoline function.
 //-----------------------------------------------------------------------------
-
-void TrampolineToErrorHandler()
-{
-    // Returning from a task is not allowed.
-    ErrorHandler.Report(ErrorMsgAttemptToReturnFromATask);
-}
 
 void TrampolineToNewTask()
 {
