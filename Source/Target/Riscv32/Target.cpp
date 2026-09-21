@@ -43,6 +43,9 @@ extern "C"
 
     // A C function that trampolines to the task function when a task is started.
     void TrampolineToNewTask();
+
+    // Raw low-level assembly query pulling the active hardware stack register.
+    uintptr_t GetStackPointer();
 }
 
 //-----------------------------------------------------------------------------
@@ -135,6 +138,19 @@ TimerTickType GetSystemTickCount()
     // Cast the permanent 32-bit millisecond tracking integer to your customized type definition and
     // return it to the scheduler.
     return (TimerTickType)freeRunningMsCounter;
+}
+
+//-----------------------------------------------------------------------------
+// This target-specific wrapper handles the calling-convention compensation
+// math and returns the clean stack pointer (SP) value of the current task.
+//-----------------------------------------------------------------------------
+StackType *GetTaskStackPointer()
+{
+    // Query the raw, unadjusted hardware stack pointer value from assembly.
+    uintptr_t rawSp = GetStackPointer();
+
+    // Return the raw address directly as no stack compensation is needed on RISC-V32.
+    return (StackType *)rawSp;
 }
 
 //-----------------------------------------------------------------------------
