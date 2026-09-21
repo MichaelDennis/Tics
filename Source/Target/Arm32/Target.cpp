@@ -36,6 +36,15 @@ SOFTWARE.
 #include <sys/types.h>
 
 //-----------------------------------------------------------------------------
+// extern "C"
+//-----------------------------------------------------------------------------
+extern "C"
+{
+    // Raw low-level assembly query pulling the active hardware stack register.
+    uintptr_t GetStackPointer();
+}
+
+//-----------------------------------------------------------------------------
 // Start TicsNameSpace
 //-----------------------------------------------------------------------------
 namespace TicsNameSpace
@@ -139,6 +148,19 @@ void TargetInit() { TargetSysTickInit(); }
 // Read-interface query layer pulling the safe static runtime clock value.
 //-----------------------------------------------------------------------------
 TimerTickType GetSystemTickCount(void) { return SystemTickCount; }
+
+//-----------------------------------------------------------------------------
+// This target-specific wrapper handles the calling-convention compensation
+// math and returns the clean stack pointer (SP) value of the current task.
+//-----------------------------------------------------------------------------
+StackType *GetTaskStackPointer()
+{
+    // Query the raw, unadjusted hardware stack pointer value from assembly.
+    uintptr_t rawSp = GetStackPointer();
+
+    // Return the raw address directly as no stack compensation is needed on ARM32.
+    return (StackType *)rawSp;
+}
 
 //-----------------------------------------------------------------------------
 // Classes
