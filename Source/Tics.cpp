@@ -172,6 +172,28 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Adjust StackTop to a 16 byte boundary to conform to ABI rules.
+///
+/// The member variable StackTop is adjusted to meet ABI requirements.
+//-----------------------------------------------------------------------------
+void StackClass::AdjustStackTopAndStackSize()
+{
+    // Use uintptr_t to protect pointer width sizes during cross-compilation.
+    // This scales automatically to 4 bytes on embedded targets and 8 bytes on x86_64.
+    uintptr_t rawStackTop = (uintptr_t)StackTop;
+
+    // Mask out the lower 4 bits to force a strict 16-byte boundary alignment.
+    rawStackTop &= (uintptr_t)SixteenByteBoundaryMask;
+
+    // Save the corrected aligned address safely back into the stack top variable.
+    StackTop = (StackType *)rawStackTop;
+
+    // Compute the new StackSizeInBytes down to the individual byte.
+    // Cast explicitly to int to match your class's member definitions.
+    StackSizeInBytes = (int)((StackTop - StackBottom) * sizeof(StackType));
+}
+
+//-----------------------------------------------------------------------------
 /// \brief StackClass destructor. Deallocates stack memory.
 //-----------------------------------------------------------------------------
 StackClass::~StackClass(void)
@@ -224,32 +246,6 @@ void StackClass::Check(void)
             ErrorHandler.Report(ErrorStackPadAreaWasWrittenTo);
         }
     }
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Adjust StackTop to a 16 byte boundary to conform to ABI rules.
-///
-/// The member variable StackTop is adjusted to meet ABI requirements.
-//-----------------------------------------------------------------------------
-void StackClass::AdjustStackTopAndStackSize()
-{
-    // This variable will hold the address of the top of the stack.
-    StackType rawStackTop;
-
-    // Assign the pointer to the top of the stack.
-    rawStackTop = (StackType)StackTop;
-
-    // Mask out unaligned address layers to guarantee a strict 16-byte boundary
-    // for ABI compliance.
-    rawStackTop &= SixteenByteBoundaryMask;
-
-    // Save the corrected aligned address directly back into the stack top variable.
-    StackTop = (StackType *)rawStackTop;
-
-    // Compute the new StackSizeInBytes. Note: StackTop is 1 word above
-    // the actual top of stack, which means we don't have to add 1 to the
-    // equation below.
-    StackSizeInBytes = (int)((StackTop - StackBottom) * sizeof(StackType));
 }
 
 //--------------------TaskClass Member Functions-------------------

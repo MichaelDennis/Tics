@@ -132,20 +132,9 @@ StackType *GetTaskStackPointer()
 //-----------------------------------------------------------------------------
 void StackClass::PrimeStack()
 {
-    // This variable will hold the address of the top of the stack.
-    StackType rawSp;
-
-    // Assign the pointer to the top of the stack.
-    rawSp = (StackType)StackTop;
-
-    // Mask out unaligned address layers to guarantee a strict 16-byte boundary alignment layout.
-    rawSp &= SixteenByteBoundaryMask;
-
-    // Save the corrected aligned address directly back into the stack top variable.
-    StackTop = (StackType *)rawSp;
-
-    // Initialize the working stack pointer that will be used below.
-    StackType *sp = (StackType *)rawSp;
+    // Set sp one word above the first stack word. (Yes, StackTop points to the
+    // word above the first stack word.)
+    StackType *sp = StackTop;
 
     // Populate the stack frame with initial placeholder register values.
     *(--sp) = 0;
