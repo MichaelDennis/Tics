@@ -11,6 +11,13 @@
 			"iostream": "cpp"
 		},
 		"riscv32TargetPlatform": "Riscv32",
-		"x86TargetPlatform": "x86_32"
+		"x86TargetPlatform": "x86_32",
+		"cSpell.words": [
+			"addi",
+			"cdecl",
+			"movl",
+			"popl",
+			"pushl"
+		]
 	}
 }

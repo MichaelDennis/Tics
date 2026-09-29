@@ -115,18 +115,19 @@ HelloTaskClass *HelloTask;
 //-----------------------------------------------------------------------------
 void HelloTaskClass::Task(void)
 {
-    // Counter initialization.
     int i = 0;
 
     // The task body is always an infinite loop.
-
     while (true)
     {
         // Output the string "Hello World!World.cpp" followed by a counter value.
-        cout << "Hello World! " << i++ << endl;
+        cout << "Hello World! " << i << endl;
 
         // Sleep for one second.
         Pause(1000);
+
+        // Bump the counter.
+        i++;
     }
 }
 
@@ -136,7 +137,6 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
-
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.

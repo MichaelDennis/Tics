@@ -69,8 +69,8 @@ int MemMgrSpace[SizeMemMgr / sizeof(int)];
 // out when needed. See MemMgrSpace[] above.
 MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
 
-// Various flags used by Tics.
-FlagsClass TicsFlags(SafeModeFlag | SimulationMode);
+// Various flags used by Tics. See Tics.hpp for flag definitions.
+FlagsClass TicsFlags(0);
 
 // List of tasks waiting to run.
 MsgListClass ReadyList;
@@ -114,9 +114,6 @@ TaskClass *CurrentTask = &DummyTask;
 // The StartupTask is a dummy task that serves as CurrentTask during the first TaskSwitch.
 StartupTaskClass StartupTask("StartupTask");
 
-// Adds the task to the ReadyList or InterfaceFifo.
-void Schedule(TaskClass *task, bool inIsr = false);
-
 //-----------------------------------------------------------------------------
 /// \brief StackClass constructor. Allocates stack space and defines the stack
 /// protective pad.
@@ -130,6 +127,8 @@ void Schedule(TaskClass *task, bool inIsr = false);
 ///
 /// \param stackPadSizeInBytes - The pad is an area at the bottom of stack memory.
 /// Any writes to this area will generate an error.
+///
+/// Note: This function may reduce the stack size toa smaller value.
 //-----------------------------------------------------------------------------
 StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
 {
@@ -143,13 +142,15 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
         ErrorHandler.Report(ErrorDefaultStackSizeOutOfRange);
     }
 
-    // Check the stack size parameter and correct it if necessary.
+    // Check the stack size parameter and generate an error if it is out of range.
     if (stackSizeInBytes > MaxStackSizeInBytes || stackSizeInBytes < MinStackSizeInBytes)
     {
-        stackSizeInBytes = DefaultStackSizeInBytes;
+        ErrorHandler.Report(ErrorMsgInvalidStackSize);
     }
 
-    // Get the stack size in multiples of sizeof(StackType).
+    // Get the StackSizeInBytes based on a stack composed of multiples of sizeof(StackType).
+    // For example, a stackSizeInBytes arg of 9 bytes would result in a StackSizeInBytes
+    // value of 8 bytes.
     StackSizeInBytes = (stackSizeInBytes / (int)sizeof(StackType)) * (int)sizeof(StackType);
 
     // Set the pad size. The pad is a low water mark at the bottom of the stack.
@@ -162,7 +163,9 @@ StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
     // to the top of the stack, so no need to subtract 1 in the equation below.)
     StackTop = StackBottom + (StackSizeInBytes / sizeof(StackType));
 
-    // Force the StackTop to the proper byte boundary.
+    // Force the StackTop to a 16 byte boundary to conform to ABI rules and
+    // recompute StackSizeInBytes.
+    AdjustStackTopAndStackSize();
 
     // Fill the entire stack area with a pattern. Used as a way to detect stack overflow.
     MemSet(StackBottom, StackSizeInBytes, DefaultStackPadBytePattern);
@@ -221,6 +224,32 @@ void StackClass::Check(void)
             ErrorHandler.Report(ErrorStackPadAreaWasWrittenTo);
         }
     }
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Adjust StackTop to a 16 byte boundary to conform to ABI rules.
+///
+/// The member variable StackTop is adjusted to meet ABI requirements.
+//-----------------------------------------------------------------------------
+void StackClass::AdjustStackTopAndStackSize()
+{
+    // This variable will hold the address of the top of the stack.
+    StackType rawStackTop;
+
+    // Assign the pointer to the top of the stack.
+    rawStackTop = (StackType)StackTop;
+
+    // Mask out unaligned address layers to guarantee a strict 16-byte boundary
+    // for ABI compliance.
+    rawStackTop &= SixteenByteBoundaryMask;
+
+    // Save the corrected aligned address directly back into the stack top variable.
+    StackTop = (StackType *)rawStackTop;
+
+    // Compute the new StackSizeInBytes. Note: StackTop is 1 word above
+    // the actual top of stack, which means we don't have to add 1 to the
+    // equation below.
+    StackSizeInBytes = (int)((StackTop - StackBottom) * sizeof(StackType));
 }
 
 //--------------------TaskClass Member Functions-------------------
@@ -307,13 +336,15 @@ void TaskClass::Suspend(void)
     }
 
     // Switch to NextTask.
-    TaskSwitch((void **)&CurrentTask->Stack.SavedSp, NextTask->Stack.SavedSp, CurrentTask,
-               NextTask);
+    TaskSwitch((void **)&Stack.SavedSp, NextTask->Stack.SavedSp);
+
+    // Check the outgoing task's stack.
+    Stack.Check();
 
     // We are now on the NextTask's stack. So, update the CurrentTask's pointer.
     CurrentTask = NextTask;
 
-    // Check the CurrentTask's stack.
+    // Check the incoming task's stack.
     CurrentTask->Stack.Check();
 
     // Now we will return to the new task (CurrentTask).
@@ -1123,7 +1154,9 @@ TaskClass::TaskClass(const char *name, int priority, int flags, int stackSizeInB
         Schedule(this);
     }
 
-    // Fake out the task's previous call to TaskSwitch(). See PrimeStack() for details.
+    // Fake out the task's "previous" call to TaskSwitch(). See PrimeStack() for details.
+    // Note that the first time "resuming" the task, there is no previous task context
+    // that was saved. So we fake it out by pushing data onto the stack.
     Stack.PrimeStack();
 }
 
@@ -2240,9 +2273,14 @@ void *MemMgrClass::Allocate(int numBytesRequested)
         // We need to preserve the node header, so the user's free space begins below the header.
         return node->UserArea();
     }
+    else if (TicsFlags.IsSet(DynamicMemoryAllocationNotAllowedFlag))
+    {
+        ErrorHandler.Report(ErrorDynamicMemoryAllocationIsBlocked);
+    }
     else if ((node = AllocateFromMemory(numBytesRequested)) != 0)
     {
-        // We need to preserve the node header, so the user's free space begins below the header.
+        // We need to preserve the node header, so the user's free space begins below the
+        // header.
         return node->UserArea();
     }
     else
@@ -2451,7 +2489,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
     // Msg a can't be the head or tail.
     if (a->Priority >= Head->Priority || a->Priority <= Tail->Priority)
     {
-        ErrorHandler.Report(ErrorMsgCannotBeTheHeadOrTail);
+        ErrorHandler.Report(ErrorMsgCannotHaveHeadOrTailPriority);
     }
 
     // Msg b can't be the Tail - you can't add after the Tail.

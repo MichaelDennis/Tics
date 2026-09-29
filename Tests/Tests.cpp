@@ -23,6 +23,12 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
+// Test World
+//
+// Simple program to print "Test World!" once a second.
+//-----------------------------------------------------------------------------
+
+//-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
@@ -39,58 +45,112 @@ using namespace std;
 using namespace TicsNameSpace;
 
 //-----------------------------------------------------------------------------
-// Tics Test Suite File
-//
-// This file contains various code that tests the Tics RTOS.
+// Test  example.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Define the test classes.
+// Define the Test Task class - you must inherit from TaskClass and
+// implement the virtual function "Task".
 //-----------------------------------------------------------------------------
-
-class TicsTestClass : public TicsBaseClass
+class TestTaskClass : public TaskClass
 {
   public:
     // Data
 
     // Functions
-
-    // Constructor.
-    TicsTestClass() {}
+    TestTaskClass(const char *name) : TaskClass(name) {}
+    void TestMsgPriorities();
+    void BlowUpStack();
+    void Task();
 };
 
 //-----------------------------------------------------------------------------
-// Pointer the hello task. Used in main() to create the hello task.
+// Pointer to the Test task. Used in main() to create the Test task.
 //-----------------------------------------------------------------------------
-HelloTaskClass *HelloTask;
+TestTaskClass *TestTask;
 
 //-----------------------------------------------------------------------------
-// Implement the Hello Task function.
+// Intentionally forces an infinite recursion loop to deliberately blow up the
+// task's stack memory boundary layout for hardware failure validation.
 //-----------------------------------------------------------------------------
-void HelloTaskClass::Task(void)
+void BlowUpTheStack()
 {
-    // Counter initialization.
-    int i = 0;
+    // Allocate a localized memory array payload buffer to accelerate the stack burn rate.
+    volatile uint32_t stackSmasherBuffer[16];
 
-    // The task body is always an infinite loop.
+    // Force a dummy compiler read-write modification check onto the memory array.
+    stackSmasherBuffer[0] = 0xDEADBEEFUL;
 
-    while (true)
+    // Execute an unbroken recursive step call to drive the stack pointer past its limit.
+    BlowUpTheStack();
+}
+
+//-----------------------------------------------------------------------------
+// Test Tasks
+//-----------------------------------------------------------------------------
+
+void LogError() {}
+
+void TestTaskClass::TestMsgPriorities()
+{
+    int msgPriorites[] = {1, 2, 3, 4, 5};
+    int numMsgs = sizeof(msgPriorites) / sizeof(int);
+    MsgClass *msg;
+
+    // Call the Blowup test.
+
+    // Send out msgs.
+    for (int i = 0; i < numMsgs; i++)
     {
-        // Output the string "Hello World!World.cpp" followed by a counter value.
-        cout << "Hello World! " << i++ << endl;
+        // Send out 5 different msgs each at a higher priority that the last.
+        Send(this, StartMsg, i, 0, msgPriorites[i]);
+    }
 
-        // Sleep for one second.
-        Pause(1000);
+    // Retrieve the msgs. We expect data values of 4, 3, 2, 1, 0 in that order.
+    for (int i = 0; i < numMsgs; i++)
+    {
+        // Get the next msg.
+        msg = Wait(StartMsg);
+
+        // Check for the expected priority.
+        if (msg->Priority != msgPriorites[numMsgs - i - 1])
+        {
+            // If we don't hav a match, then priorites are not working.
+            LogError();
+        }
     }
 }
 
 //-----------------------------------------------------------------------------
-// Create HelloTask and start tasking.
+// Implement the Test Task function.
 //-----------------------------------------------------------------------------
+void TestTaskClass::Task(void)
+{
+    // The task body is always an infinite loop.
+    while (true)
+    {
+        // Wait for a start testing msg.
+        Wait(StartMsg);
+
+        TestTask->TestMsgPriorities();
+    }
+}
+
+//-----------------------------------------------------------------------------
+
 int main()
 {
-    // Create the hello task.
-    HelloTask = new HelloTaskClass("Hello");
+    // Create the test object.
+    TestTask = new TestTaskClass("TestTask");
+
+    // Blowup the stack.
+    // TestTask->BlowUpStack();
+
+    // Create the Test task.
+    TestTask = new TestTaskClass("Test");
+
+    // Send a msg to get things started.
+    TicsSystemTask.Send(TestTask, StartMsg);
 
     // Start tasking.
     Suspend();

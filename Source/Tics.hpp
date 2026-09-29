@@ -60,8 +60,7 @@ typedef unsigned int TimerTickType;
 //-----------------------------------------------------------------------------
 /// ASM Externals
 //-----------------------------------------------------------------------------
-extern "C" void TaskSwitch(void **currentTaskSavedSp, void *newTaskSavedSp, void *currentTask,
-                           void *nextTask);
+extern "C" void TaskSwitch(void **currentTaskSavedSp, void *newTaskSavedSp);
 
 //-----------------------------------------------------------------------------
 /// C Externals
@@ -76,6 +75,7 @@ extern "C" TimerTickType GetSystemTickCount();
 // Macros
 //-----------------------------------------------------------------------------
 #define InRange(minValue, maxValue, value) ((value) <= (maxValue) && (value) >= (minValue))
+#define AlignDownMask(type) (~(sizeof(type) - 1))
 
 //-----------------------------------------------------------------------------
 // General enums
@@ -83,6 +83,10 @@ extern "C" TimerTickType GetSystemTickCount();
 
 enum TicsNamespaceEnum
 {
+    //---------------------------------------------------------------------------
+    // General enums
+    //---------------------------------------------------------------------------
+
     // The maximum number of characters allowed in a string, including a
     // terminating 0.
     MaxNumStringChars = 32,
@@ -110,19 +114,21 @@ enum TicsNamespaceEnum
     // of an array.
     ArrayEndMarker = 99999,
 
-    // TicsNameSpace flags.
+    // A mask used to align an address on a 16 byte boundary for ABI conformance.
+    SixteenByteBoundaryMask = ~0xf,
 
-    // When set, this flag performs extra checking.
+    //---------------------------------------------------------------------------
+    // Tics system flags.
+    //---------------------------------------------------------------------------
+
+    // When set, this flag performs extra checking. Unused. Tics performs extra checking already.
     SafeModeFlag = 1,
 
-    // When set, the WatchDogTimer flag is checked at each context switch.
+    // When set, the WatchDogTimer flag is checked at each context switch. Unused.
     WatchDogFlag = 2,
 
-    // When set, Tics runs on WSL or a Linux PC instead of the embedded system.
-    SimulationMode = 4,
-
-    // A mask used to align an address on a 16 byte boundary.
-    SixteenByteBoundaryMask = ~0xf,
+    // If set, this flag blocks memory allocation.
+    DynamicMemoryAllocationNotAllowedFlag = 4,
 };
 
 //-----------------------------------------------------------------------------
@@ -216,7 +222,7 @@ enum ErrorMsgEnum
     ErrorMsgIsAlreadyInAList = 1003,
     ErrorDestinationMsgIsNotInAList = 1004,
     ErrorBothArgsPointToTheSameMsg = 1005,
-    ErrorMsgCannotBeTheHeadOrTail = 1006,
+    ErrorMsgCannotHaveHeadOrTailPriority = 1006,
     ErrorDestinationMsgCannotBeTheTail = 1007,
     ErrorListIdIsInvalid = 1008,
     ErrorCannotUnlinkFromAnEmptyList = 1009,
@@ -299,6 +305,7 @@ enum ErrorMsgEnum
     ErrorMsgNoMatchForTaskName = 1086,
     ErrorMsgAttemptToReturnFromATask = 1087,
     ErrorMsgAttemptToReturnFromMain = 1088,
+    ErrorDynamicMemoryAllocationIsBlocked = 1089,
 };
 
 //-----------------------------------------------------------------------------
@@ -652,10 +659,10 @@ class StackClass : public TicsBaseClass
         DefaultStackPadSizeInBytes = 128,
 
         // The stack must be at least this large.
-        MinStackSizeInBytes = 2048,
+        MinStackSizeInBytes = 1024,
 
         // The stack must not exceed this size.
-        MaxStackSizeInBytes = (MinStackSizeInBytes * 16),
+        MaxStackSizeInBytes = (1024 * 8),
 
         // This pattern is written to the pad area as a visual aid.
         DefaultStackPadBytePattern = 0x22,
@@ -698,6 +705,9 @@ class StackClass : public TicsBaseClass
 
     // Checks the stack for validity.
     void Check();
+
+    // Adjust stack top to a 16 byte boundary to conform to ABI rules.
+    void AdjustStackTopAndStackSize();
 };
 
 //-----------------------------------------------------------------------------
@@ -975,6 +985,13 @@ class ErrorHandlerClass : public TicsBaseClass
   public:
     // Data
 
+    enum FlagsEnum
+    {
+
+    };
+
+    FlagsClass Flags;
+
     // Functions
 
     void Report(int errorNum = 0);
@@ -1188,8 +1205,7 @@ void TrampolineToNewTask();
 void Send(TaskClass *task, FifoClass *fifo, void *data);
 void TargetInit();
 StackType *GetTaskStackPointer();
-
-// MDM void Target_SysTick_Init();
+void Schedule(TaskClass *task, bool inIsr = false);
 
 //-----------------------------------------------------------------------------
 /// IsrPacketClass
