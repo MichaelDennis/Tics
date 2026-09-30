@@ -279,7 +279,7 @@ enum ErrorMsgEnum
     ErrorAttemptToAddToAFullFifo = 1060,
     ErrorTaskIdMismatch = 1061,
     ErrorTaskIdMismatchCorruptedMsg = 1062,
-    ErrorNullPointer = 1063,
+    ErrorNullTaskPointer = 1063,
     ErrorMaxAllowedMsgsInRecv = 1064,
     ErrorAttemptToDeleteANullNode = 1065,
     ErrorAttemptToDeleteANonExistentNode = 1066,

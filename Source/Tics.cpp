@@ -44,15 +44,14 @@ SOFTWARE.
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
 
-void TrampolineToNewTask();
-
 //-----------------------------------------------------------------------------
 // Start TicsNameSpace
 //-----------------------------------------------------------------------------
 
 namespace TicsNameSpace
 {
-// Initialize the static Tics base Id counter.
+// Initialize the static Tics base class Id counter. All Tics class ultimately inherit from
+// TicsBaseClass.
 int TicsBaseClass::IdCounter = 0;
 
 // Msgs are created by allocating a memory block from this area.
@@ -72,7 +71,9 @@ MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
 // Various flags used by Tics. See Tics.hpp for flag definitions.
 FlagsClass TicsFlags(0);
 
-// List of tasks waiting to run.
+// List of tasks waiting to run. Actually it's a list of msgs which include a pointer to
+// the task that the msg is destined for which is the task that will run when the msg
+// bubbles up to the front of the list.
 MsgListClass ReadyList;
 
 // List of tasks that currently exist in the system.
@@ -85,7 +86,9 @@ TaskListClass TaskList;
 DelayListClass DelayList;
 
 // List of msgs that are marked for deletion. Msgs are valid while in the task that
-// was waiting for the msg. Once the task relinquishes control, Tics deletes the msg.
+// was waiting for the msg. Once the task relinquishes control, after removing the msg
+// from the msg queue, the msg is added to the DeleteList. Then, at the next context switch,
+// Tic deletes every msg in the DeleteList.
 ListClass DeleteList;
 
 // A task that Tics maintains for its own use.
@@ -255,13 +258,12 @@ void StackClass::Check(void)
 //-----------------------------------------------------------------------------
 void TaskListClass::Add(TaskClass *task)
 {
-    // Add the noe to the list.
+    // Add the node to the list.
     ListClass::Add((NodeClass *)task);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Perform various things that need to be done prior to performing
-/// a context switch.
+/// \brief Perform a context switch.
 //-----------------------------------------------------------------------------
 void TaskClass::Suspend(void)
 {
@@ -361,6 +363,10 @@ bool TaskClass::TaskExists(int taskId) { return TaskList.TaskExists(taskId); }
 //-----------------------------------------------------------------------------
 /// \brief For this list, delete all msgs whose Receiver or Sender task matches
 /// the indicated task.
+////
+/// This function is called on every active task's MsgList as part of a cleanup
+/// procedure done prior to deleting a task. We don't want any tasks to have
+/// references to the task pending deletion.
 ///
 /// \param task - See the description above.
 //-----------------------------------------------------------------------------
@@ -400,7 +406,7 @@ bool MsgListClass::RemoveTaskReferences(TaskClass *task)
 
 //-----------------------------------------------------------------------------
 /// \brief Remove and delete one or more occurrences of a pointer to a
-/// a node from a list.
+/// a node from this list.
 ///
 /// \param nodeToDelete - A pointer to the node to remove from the list.
 //-----------------------------------------------------------------------------
@@ -433,7 +439,8 @@ bool ListClass::Delete(NodeClass *nodeToDelete)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Remove and delete all occurrences of a node from a list.
+/// \brief Remove and delete all occurrences of a node from a list based on the
+/// node Id.
 ///
 /// \param node - The id of the node to remove from the list.
 //-----------------------------------------------------------------------------
@@ -463,9 +470,9 @@ bool ListClass::Delete(int id)
 //-----------------------------------------------------------------------------
 /// \brief Insert a msg into a list. Inserts msg a after msg b.
 ///
-/// \param a - Msg to insert after msg b.
+/// \param a - Node to insert after msg b.
 ///
-/// \param b - Msg after which msg a is inserted.
+/// \param b - Node after which msg a is inserted.
 //-----------------------------------------------------------------------------
 void ListClass::Insert(NodeClass *a, NodeClass *b)
 {
@@ -475,7 +482,7 @@ void ListClass::Insert(NodeClass *a, NodeClass *b)
         ErrorHandler.Report(ErrorMsgListIsFullCannotInsert);
     }
 
-    // Check for any issues before inserting the node a after b..
+    // Check for any issues before inserting the node a after b.
     DoInsertSafetyChecks(a, b);
 
     // Insert the msg.
@@ -484,19 +491,19 @@ void ListClass::Insert(NodeClass *a, NodeClass *b)
     b->Next->Prev = a;
     b->Next = a;
 
-    // Mark the msg as being in this list.
+    // Mark the node as being in this list.
     a->SetAsInAList(Id);
 
-    // Bump the list contents count.
+    // Bump the list content count.
     NumNodesInList++;
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Unlink a msg from the list, but don't delete it.
+/// \brief Unlink (remove) a node from this list, but don't delete it.
 ///
 /// \param a - A pointer to the msg to unlink.
 ///
-/// \return A pointer to the unlinked msg.
+/// \return A pointer to the unlinked node.
 //-----------------------------------------------------------------------------
 NodeClass *ListClass::Unlink(NodeClass *a)
 {
@@ -504,26 +511,26 @@ NodeClass *ListClass::Unlink(NodeClass *a)
     a->Prev->Next = a->Next;
     a->Next->Prev = a->Prev;
 
-    // Mark the msg as not being in a list.
+    // Mark the node as not being in a list.
     a->SetAsNotInAList();
 
-    // Zero the removed msg links.
+    // Zero the removed node links.
     a->Next = a->Prev = 0;
 
-    // Since the msg is no longer in the list, decrement the number of msgs in the list.
+    // Since the node is no longer in the list, decrement the number of nodes in the list.
     NumNodesInList--;
 
-    // Return a pointer to the unlinked msg.
+    // Return a pointer to the unlinked node.
     return a;
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Add a msg to the list according to its priority.
+/// \brief Add a node to the list according to its priority.
 ///
 /// Search starting at the end of the list, since we'll probably add at the
-/// end, because all msgs are typically at the same priority.
+/// end, because all nodes are typically at the same priority.
 ///
-/// \param a - The msg to add.
+/// \param a - The node to add.
 //-----------------------------------------------------------------------------
 void ListClass::AddByPriority(NodeClass *a)
 {
@@ -542,28 +549,29 @@ void ListClass::AddByPriority(NodeClass *a)
 
         if (bPriority >= aPriority)
         {
-            // Insert msg a after msg b.
+            // Insert node a after node b.
             Insert(a, b);
             return;
         }
     }
 
-    // If we've fallen to here, the list is either empty, or the msg priority is higher than
-    // any msg in the list. In either case, we want to add the msg after the head.
+    // If we've fallen to here, the list is either empty, or the node priority is higher than
+    // any node in the list. In either case, we want to add the node after the head.
     Insert(a, Head);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Add a msg to the end of the list.
+/// \brief Add a node to the end of the list.
 //-----------------------------------------------------------------------------
 void ListClass::Add(NodeClass *a)
 {
-    // Insert the msg after the last item in the list (which means in front of the tail).
+    // Insert the node after the last item in the list (which means in front
+    // of the tail).
     Insert(a, Tail->Prev);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Add msg a to the delay list.
+/// \brief Add a msg to the delay list.
 ///
 /// The Delay List is a list whose msgs will be sent out after their respective timers
 ///  expire. The Delay List is sorted by the msg EndTime field. Smallest EndTime's are
@@ -577,6 +585,7 @@ void DelayListClass::AddByDelay(MsgClass *a)
     MsgClass *b = (MsgClass *)Head->Next;
     NodeClass *node;
 
+    // Scan the DelayList for timed out msgs.
     for (node = Head->Next; node != Tail; node = node->Next)
     {
         // Convert to a msg.
@@ -590,8 +599,8 @@ void DelayListClass::AddByDelay(MsgClass *a)
     }
 
     // Insert msg a in front of msg b (after the msg in front of msg b).
-    // If we didn't break, b is the Tail, so we're inserting after Tail->Prev,
-    // which is the last msg in the list. This is the case when the list
+    // If we didn't break, b is the Tail, so in that case, we're inserting after Tail->Prev,
+    // which will make msg a the last msg in the list. This is the case when the list
     // is empty, or a->EndTime is greater than every msg in the list.
     Insert(a, b->Prev);
 }
@@ -601,9 +610,13 @@ void DelayListClass::AddByDelay(MsgClass *a)
 ///
 /// Delayed msgs are msgs that will be sent out at a later time, designated by
 /// the msg EndTime field. The EndTime field is in units of system ticks (see
-/// the function ReadTickCount()). Delayed msgs are held in the Delay List.
-/// This function scans the Delay List, and sends out any msgs whose EndTime
-/// is at or past the current time.
+/// the function ReadTickCount()). Delayed msgs are held in the DelayList.
+/// This function scans the DelayList, and sends out any msg whose EndTime
+/// is at or past the current time. Since the DelayList is sorted, smaller
+/// delays first, the entire list does not have to be scanned, because if
+/// a given msg EndTIme is greater than the current time, then all the msgs
+/// further down in the list (i.e. those with the same or greater end time) are
+/// not timed out either.
 //-----------------------------------------------------------------------------
 void DelayListClass::CheckForTimeouts()
 {
@@ -809,7 +822,8 @@ bool TaskListClass::TaskExists(TaskClass *task, int id)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Checks for the existence of a task object in the TaskList.
+/// \brief Checks for the existence of a task object in the TaskList based
+/// only on its task Id.
 ///
 /// The Task List contains a list of TaskClass objects. Each object is
 /// checked for an id match. A value of true is returned if a match is
@@ -903,21 +917,29 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// must be used, or the isr can simply do what this function does, i.e., add data to a
 /// fifo, then schedule the task to run. When the task runs, it retrieves the data
 /// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass *fifo, void *data).
+/// TaskClass::Wait(FifoClass *fifo, void *data). For this to work, the isr must know
+/// which fifo and which task to send the msg to, and the task must know to wait
+/// for the appropriate fifo msg.
 ///
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo.
 /// \param data - The data (msg) to be copied into the fifo slot.
 ///
-/// Note: There is no need for a data count, because the fifo knows
-/// its slot size.
+/// Note: There is no need for for an arg that specifies the data size, because
+/// the fifo know its slot size which is also the size of the msg.
 //-----------------------------------------------------------------------------
 void Send(TaskClass *task, FifoClass *fifo, void *data)
 {
     // Add the data block into the task's fifo.
     fifo->Add(data);
 
-    // Add the task to the Interrupt fifo.
+    // Add the task to the Interrupt Fifo by calling Schedule().
+    // Note that there are two fifos, the Data fifo, which contains
+    // the msgs sent to the handler task, and the Interrupt Fifo that contains
+    // a pointer to the handler task. The Interrupt Fifo is checked at
+    // each context switch, and if a task is found in the Interrupt Fifo,
+    // the task is scheduled to run, by calling Schedule() so that the task
+    // can pull the data from the Data Fifo.
     Schedule(task, true);
 }
 
@@ -925,6 +947,9 @@ void Send(TaskClass *task, FifoClass *fifo, void *data)
 /// \brief Waits for a fifo msg.
 ///
 /// See the description given above for Send().
+///
+/// \param fifo - A pointer to the Data Fifo.
+/// \param data - A pointer to the data buffer that will receive the fifo data.
 //-----------------------------------------------------------------------------
 void TaskClass::Wait(FifoClass *fifo, void *data)
 {
@@ -956,7 +981,7 @@ void TaskListClass::RemoveTask(TaskClass *task)
 {
     if (task == 0)
     {
-        ErrorHandler.Report(ErrorNullPointer);
+        ErrorHandler.Report(ErrorNullTaskPointer);
     }
 
     // Delete the task object from the task list.
@@ -1790,7 +1815,6 @@ void IdleTaskClass::Task()
 void TicsSystemTaskClass::Task()
 {
     MsgClass *msg;
-    TaskClass *task;
 
     while (true)
     {
@@ -1800,6 +1824,7 @@ void TicsSystemTaskClass::Task()
         // Process the request.
         switch (msg->MsgNum)
         {
+            // For now, drop all msgs.
         default:
             break;
         }
