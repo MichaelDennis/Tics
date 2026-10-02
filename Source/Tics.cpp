@@ -29,15 +29,10 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-/// \brief A basic overview of the operation of the Tics RTOS
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 //-----------------------------------------------------------------------------
@@ -452,7 +447,7 @@ bool ListClass::Delete(int id)
 
     for (node = Head->Next; node != Tail; node = next)
     {
-        // We need to save this because tempNode may be deleted in the if test below.
+        // We need to save this because the node may be deleted in the if test below.
         next = node->Next;
 
         // If it matches, then delete the node.
@@ -501,7 +496,7 @@ void ListClass::Insert(NodeClass *a, NodeClass *b)
 //-----------------------------------------------------------------------------
 /// \brief Unlink (remove) a node from this list, but don't delete it.
 ///
-/// \param a - A pointer to the msg to unlink.
+/// \param a - A pointer to the node to unlink.
 ///
 /// \return A pointer to the unlinked node.
 //-----------------------------------------------------------------------------
@@ -538,7 +533,7 @@ void ListClass::AddByPriority(NodeClass *a)
     int aPriority;
     int bPriority;
 
-    // Get the priority.
+    // Get the priority. of the node to add.
     aPriority = a->Priority;
 
     // Scan the list by priority in reverse order, and insert accordingly. We scan in
@@ -562,6 +557,8 @@ void ListClass::AddByPriority(NodeClass *a)
 
 //-----------------------------------------------------------------------------
 /// \brief Add a node to the end of the list.
+///
+/// \param a - The node to add to the end of the list.
 //-----------------------------------------------------------------------------
 void ListClass::Add(NodeClass *a)
 {
@@ -574,15 +571,14 @@ void ListClass::Add(NodeClass *a)
 /// \brief Add a msg to the delay list.
 ///
 /// The Delay List is a list whose msgs will be sent out after their respective timers
-///  expire. The Delay List is sorted by the msg EndTime field. Smallest EndTime's are
+///  expire. The Delay List is sorted by the msg EndTime field. Smaller EndTime's are
 /// at the front of the list.
 ///
 /// \param a - The msg to add to the Delay List.
 //-----------------------------------------------------------------------------
 void DelayListClass::AddByDelay(MsgClass *a)
 {
-    // We need to assign b because the for loop may be skipped if the list is empty.
-    MsgClass *b = (MsgClass *)Head->Next;
+    MsgClass *b;
     NodeClass *node;
 
     // Scan the DelayList for timed out msgs.
@@ -594,15 +590,19 @@ void DelayListClass::AddByDelay(MsgClass *a)
         // Insert msg a in front of msg b if it's end time is sooner.
         if (a->EndTime < b->EndTime)
         {
-            break;
+            // Msg a's EndTime is sooner than msg b, so insert in front
+            // of msg b.
+            Insert(a, b->Prev);
+            return;
         }
     }
 
-    // Insert msg a in front of msg b (after the msg in front of msg b).
-    // If we didn't break, b is the Tail, so in that case, we're inserting after Tail->Prev,
-    // which will make msg a the last msg in the list. This is the case when the list
-    // is empty, or a->EndTime is greater than every msg in the list.
-    Insert(a, b->Prev);
+    // If we've fallen to here, then the delay time for msg a is larger
+    // than any of the msgs in the list, or, the list was empty, so,
+    // in either case, we add it in front of the Tail i.e.,
+    // after Tail->Prev. Note that Tail->Prev points to the Head if
+    // the list is empty.
+    Insert(a, Tail->Prev);
 }
 
 //-----------------------------------------------------------------------------
@@ -625,8 +625,8 @@ void DelayListClass::CheckForTimeouts()
     MsgClass *msg;
     MsgClass *nextMsg;
     TimerTickType currentTime;
-    int32_t dtCurrent;
-    int32_t dtNext;
+    int dtCurrent;
+    int dtNext;
 
     // If the list is empty, we have no timers to process.
     if (IsEmpty())
@@ -660,7 +660,7 @@ void DelayListClass::CheckForTimeouts()
 
         // Get the signed difference between the current tick count and
         // timeout tick count for this msg. This handles timer wrap.
-        dtCurrent = (int32_t)(currentTime - msg->EndTime);
+        dtCurrent = (int)(currentTime - msg->EndTime);
 
         // If we're at or past the delayed msg end time, then dispatch it.
         if (dtCurrent >= 0)
@@ -668,22 +668,17 @@ void DelayListClass::CheckForTimeouts()
             // Remove the delayed msg from the delay list.
             Remove(msg);
 
+            msg->Data = dtCurrent;
+
             // Add the delayed msg to the Ready List.
             ReadyList.AddByPriority(msg);
-
-            // Get the signed difference between the current tick count and
-            // end timeout tick count for the next msg in the list.
-            dtNext = (int32_t)(currentTime - nextMsg->EndTime);
-
-            // If there are no other timed-out msgs, then exit.
-            // Remember, the msgs are sorted by the end time, so if
-            // the next msg has not timed out, then no other msg in the list
-            // is timed out either. Note: if nextMsg is the Tail, then the
-            // if condition will always fail, since EndTime is initialized to 0.
-            if (nextMsg == Tail || dtNext < 0)
-            {
-                break;
-            }
+        }
+        else
+        {
+            // Since this timer is not ready, neither will any of the other timers in the
+            // list be ready because the list is ordered from low to high timer values, so,
+            // we will exit to timer check loop.
+            break;
         }
     }
 
@@ -1290,13 +1285,13 @@ MsgClass *TaskClass::StartTimer(int numTicks, int priority, int msgNum)
 ///
 /// \param priority - The priority of the msg.
 //-----------------------------------------------------------------------------
-void TaskClass::Pause(int numTicks, int priority)
+MsgClass *TaskClass::Pause(int numTicks, int priority)
 {
     // Start a timer for this task.
     StartTimer(numTicks, priority);
 
     // Wait for the delayed msg.
-    Wait(TimeoutMsg);
+    return Wait(TimeoutMsg);
 }
 
 //-----------------------------------------------------------------------------
@@ -2458,19 +2453,19 @@ void ListClass::CheckListIntegrity(void)
     }
 
     // Make sure that we can traverse the list and check each node.
-    for (node = Head;; node = node->Next, loopCounter++)
+    for (node = Head->Next, loopCounter = 0; node != Tail; node = node->Next, loopCounter++)
     {
         // Check to see if we have too many nodes in the list.
         if (loopCounter > DefaultMaxNodes)
         {
             ErrorHandler.Report(ErrorMsgMaxNumberOfListNodesExceeded);
         }
+    }
 
-        // If we're at the end of the list, then break.
-        if (node == Tail)
-        {
-            break;
-        }
+    // Make sure that the list's node count matches the number of nodes seen in the loop.
+    if (loopCounter != NumNodesInList)
+    {
+        ErrorHandler.Report(ErrorNumNodesInListIsInvalid);
     }
 }
 
@@ -2519,7 +2514,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
         ErrorHandler.Report(ErrorDestinationMsgCannotBeTheTail);
     }
 
-    // Make sure that the msg a is in this list by comparing msg a's list id to this->
+    // Make sure that the msg a is in this list by comparing msg a's list id to this->Id.
     if (a->ListIdIsValid(Id) == false)
     {
         ErrorHandler.Report(ErrorListIdIsInvalid);

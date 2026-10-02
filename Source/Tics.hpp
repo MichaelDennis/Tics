@@ -306,6 +306,7 @@ enum ErrorMsgEnum
     ErrorMsgAttemptToReturnFromATask = 1087,
     ErrorMsgAttemptToReturnFromMain = 1088,
     ErrorDynamicMemoryAllocationIsBlocked = 1089,
+    ErrorNumNodesInListIsInvalid = 1090,
 };
 
 //-----------------------------------------------------------------------------
@@ -651,9 +652,8 @@ class StackClass : public TicsBaseClass
 
     enum StackClassEnum
     {
-
         // Default stack size.
-        DefaultStackSizeInBytes = (1024 * 4),
+        DefaultStackSizeInBytes = (1024 * 2),
 
         // The pad is a warning area at the end of stack memory.
         DefaultStackPadSizeInBytes = 128,
@@ -874,7 +874,7 @@ class TaskClass : public NodeClass
     void Reply(MsgClass *receivedMsg, int msgNum = NullMsg, int data = 0, int delay = 0,
                int priority = MediumPriority, TaskClass *sender = 0);
 
-    void Pause(int numTicks = DefaultNumTicks, int priority = MediumPriority);
+    MsgClass *Pause(int numTicks = DefaultNumTicks, int priority = MediumPriority);
 
     MsgClass *StartTimer(int numTicks = DefaultNumTicks, int priority = MediumPriority,
                          int msgNum = TimeoutMsg);

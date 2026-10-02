@@ -163,7 +163,6 @@ int main()
     Suspend();
 
     // We should never get here.
-    ErrorHandler.Report(ErrorMsgAttemptToReturnFromMain);
 
     return 0;
 }

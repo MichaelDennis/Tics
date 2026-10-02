@@ -120,8 +120,8 @@ void HelloTaskClass::Task(void)
     // The task body is always an infinite loop.
     while (true)
     {
-        // Output the string "Hello World!World.cpp" followed by a counter value.
-        cout << "Hello World! " << i << endl;
+        // Output the string followed by a counter value.
+        cout << "Hello World! " << Id << " " << flush; //<< endl;
 
         // Sleep for one second.
         Pause(1000);
@@ -137,6 +137,12 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
+    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("Hello");
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.
