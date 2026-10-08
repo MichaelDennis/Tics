@@ -29,7 +29,7 @@
 // ** Important things to know about isr behavior **
 //
 //  On entering an isr, all interrupts must remain disabled until the isr exits. This avoids the
-// problem of another interrupt interferring with the current interrupt wjile it is writing
+// problem of another interrupt interfering with the current interrupt while it is writing
 // to the fifo.
 //
 // Both the isr and the task that handles deferred isr data are written by the user.

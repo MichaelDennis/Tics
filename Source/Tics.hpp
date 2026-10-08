@@ -91,6 +91,9 @@ enum TicsNamespaceEnum
     // terminating 0.
     MaxNumStringChars = 32,
 
+    // The maximum number of characters allowed in a MemSet function call.
+    MaxNumMemSetChars = 0xffff,
+
     // The maximum allowed size of a timer.
     MaxTimerSize = (0x80000000 - 1),
 
@@ -290,7 +293,7 @@ enum ErrorMsgEnum
     ErrorMsgAttemptToScheduleANonexistentTask = 1071,
     ErrorMsgIsrDidNotAddDataToFifo = 1072,
     ErrorMsgNullPointerInMemCopy = 1073,
-    ErrorMsgNumCharsIsZeroInMemCopy = 1074,
+    ErrorMsgInvalidNumCharsInMemCopy = 1074,
     ErrorMsgOverlapInMemCopy = 1075,
     ErrorMsgNullPointerInMemSet = 1076,
     ErrorMsgAttemptToRemoveFromAnEmptyFifo = 1077,
@@ -307,6 +310,9 @@ enum ErrorMsgEnum
     ErrorMsgAttemptToReturnFromMain = 1088,
     ErrorDynamicMemoryAllocationIsBlocked = 1089,
     ErrorNumNodesInListIsInvalid = 1090,
+    ErrorMsgInvalidNumCharsInMemSet = 1091,
+    ErrorMsgOverlapErrorInMemCopy = 1092,
+    ErrorMsgUserCannotProvideFifoSpace = 1093,
 };
 
 //-----------------------------------------------------------------------------
@@ -636,7 +642,7 @@ class DelayListClass : public MsgListClass
     // Adds a msg to the delay list according to its delay time.
     void AddByDelay(MsgClass *a);
 
-    // Checks the DelayList for expired msgs and sends them.
+    // Check the DelayList for expired msgs and adds them to the ReadyList.
     void CheckForTimeouts();
 };
 
@@ -659,15 +665,15 @@ class StackClass : public TicsBaseClass
         DefaultStackPadSizeInBytes = 128,
 
         // The stack must be at least this large.
-        MinStackSizeInBytes = 1024,
+        MinStackSizeInBytes = (1024 * 2),
 
         // The stack must not exceed this size.
         MaxStackSizeInBytes = (1024 * 8),
 
-        // This pattern is written to the pad area as a visual aid.
+        // This byte pattern is written to the pad area as a visual aid.
         DefaultStackPadBytePattern = 0x22,
 
-        // This pattern is written to the pad area as a visual aid.
+        // This word pattern is written to the pad area as a visual aid.
         DefaultStackPadWordPattern = 0x22222222,
     };
 
@@ -686,6 +692,7 @@ class StackClass : public TicsBaseClass
     StackType *StackBottom;
 
     // The saved stack pointer of a task prior to performing a context switch.
+    // It is used to restore the task's stack when it is resumed.
     StackType *SavedSp;
 
     // Functions
@@ -703,10 +710,11 @@ class StackClass : public TicsBaseClass
     // Check for valid stack size.
     bool StackSizeIsValid(int stackSizeInBytes);
 
-    // Checks the stack for validity.
+    // Check the stack for validity.
     void Check();
 
-    // Adjust stack top to a 16 byte boundary to conform to ABI rules.
+    // Adjust stack top to a 16 byte boundary to conform to ABI rules. This adjustment may also
+    // change the stack size.
     void AdjustStackTopAndStackSize();
 };
 
@@ -739,7 +747,7 @@ class FifoClass : public TicsBaseClass
     // This is a pointer to the start of the space where the fifo lives.
     void *FifoSpace;
 
-    // The last valid byte in the fifo.
+    // The last valid byte in the fifo. Used to determine when to wrap.
     char *LastFifoByte;
 
     // The size of a fifo slot.
@@ -801,17 +809,18 @@ class TaskClass : public NodeClass
 
     enum TaskClassEnum
     {
-        // If set, unexpected msgs are dropped.
+        // If set, unexpected msgs are dropped. For example, if the task is waiting for msg a
+        // but receives msg b, msg b is dropped, otherwise, it stays in the task's MsgList.
         DropUnexpectedMsgsFlag = 1,
 
         // If set, a task will be scheduled to run, (added to the ReadyList),
         // when it is created.
         ScheduleTaskOnCreationFlag = 2,
 
-        // Set to indicate that this is a system task.
+        // Set to indicate that this is a system task (a task created and used by Tics).
         SystemTaskFlag = 4,
 
-        // The default numTicks in the Pause(numTicks) member function.
+        // The default numTicks used in the Pause() member function when no arg is provided.
         DefaultNumTicks = 1000
     };
 
@@ -824,7 +833,7 @@ class TaskClass : public NodeClass
     // The task's stack. Every task needs its own stack.
     StackClass Stack;
 
-    // See the Schedule() function to understand how the task priority is used.
+    // See the Schedule() function in Tics.cpp to understand how the task priority is used.
     int Priority;
 
     // The task's msg list. Msgs sent to this task are placed into the MsgList
@@ -851,7 +860,7 @@ class TaskClass : public NodeClass
     virtual void Task() = 0;
 
     // Returns true if the task exists based on a pointer to the task.
-    bool TaskExists(TaskClass *receiver = 0);
+    bool TaskExists(TaskClass *task = 0);
 
     // Returns true if the task exists based on the task id.
     bool TaskExists(int id);
@@ -859,14 +868,13 @@ class TaskClass : public NodeClass
     // Deletes a sent msg.
     bool Cancel(MsgClass *msg, int nodeId = 0);
 
-    // Adds the task to the Ready List. If the task arg is 0, then "this" task
-    // is used.
+    // Adds the task to the Ready List. If the task arg is 0, then "this" task is used.
     void Schedule(TaskClass *task = 0);
 
     // Send a pre-made msg.
     MsgClass *Send(MsgClass *msg);
 
-    // Send a msg to another task.
+    // Dynamically creates a msg from the args and sends it to the indicated task.
     MsgClass *Send(TaskClass *task, int msgNum = NullMsg, int data = 0, int delay = 0,
                    int priority = MediumPriority, TaskClass *sender = 0);
 
@@ -874,26 +882,38 @@ class TaskClass : public NodeClass
     void Reply(MsgClass *receivedMsg, int msgNum = NullMsg, int data = 0, int delay = 0,
                int priority = MediumPriority, TaskClass *sender = 0);
 
+    // Suspends the current task by the indicated number of system clock ticks.
     MsgClass *Pause(int numTicks = DefaultNumTicks, int priority = MediumPriority);
 
+    // Creates and sends a delayed msg for the current task.
     MsgClass *StartTimer(int numTicks = DefaultNumTicks, int priority = MediumPriority,
                          int msgNum = TimeoutMsg);
 
+    // The current task sends a msg to itself, then waits for it. This allows other
+    // tasks to run. Seldom used. Tasks usually wait for a msg.
     void Yield(void);
 
+    // Suspends the current task until the indicated msg is received.
     MsgClass *Wait(int msgNum = AnyMsg);
 
+    // Suspends the current task until the any msg in the array received.
     MsgClass *Wait(int *msgNumArray, int numMsgs);
 
     // Wait for an item to be added to a fifo.
     void Wait(FifoClass *fifo, void *data);
 
+    // Returns a pointer to the indicated msg if it is in the task's MsgList,
+    // otherwise it suspends.
     MsgClass *Recv(int msgNum = AnyMsg);
 
+    // Returns a pointer to the any of the msgs in the array if it is in the task's MsgList,
+    // otherwise it suspends.
     MsgClass *Recv(int *msgNumArray, int numMsgs);
 
+    // Suspends the current task. See the Suspend() function for details.
     void Suspend();
 
+    // Remove all references to the indicated task from the current task's msg list.
     void DeleteFromMsgList(TaskClass *task);
 
     // Returns true if any of the bits in the mask are true.
@@ -937,21 +957,6 @@ class IdleTaskClass : public TaskClass
     void Task();
 };
 
-class DummyTaskClass : public TaskClass
-{
-  public:
-    // Functions
-
-    // Constructor.
-    DummyTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0)
-        : TaskClass(name, priority, flags)
-    {
-    }
-
-    // Task function.
-    void Task() {}
-};
-
 //-----------------------------------------------------------------------------
 // StartupTaskClass
 //
@@ -973,6 +978,28 @@ class StartupTaskClass : public TaskClass
 
     // Task function.
     void Task();
+};
+
+//-----------------------------------------------------------------------------
+// DummyTaskClass
+//
+// When we switch to the StartupTask on startup, the context switching code
+// requires a currently running task whose context must be saved. The
+// DummyTask serves this purpose.
+//-----------------------------------------------------------------------------
+class DummyTaskClass : public TaskClass
+{
+  public:
+    // Functions
+
+    // Constructor.
+    DummyTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0)
+        : TaskClass(name, priority, flags)
+    {
+    }
+
+    // Task function.
+    void Task() {}
 };
 
 //-----------------------------------------------------------------------------
@@ -1031,7 +1058,7 @@ class NodeHeaderClass : public TicsBaseClass
         SignatureValue = 0x01234567
     };
 
-    // Used to detect node corruption.
+    // Contains the SignatureValue listed above. Used to detect node corruption.
     int Signature;
 
     // Number of bytes in the memory block not including the header.
@@ -1040,15 +1067,19 @@ class NodeHeaderClass : public TicsBaseClass
     // The memory mgr pool to which this node belongs.
     MemMgrClass *MemMgrPool;
 
-    // The pointer to the next node in the memory pool singly linked list.
+    // The pointer to the next node in the memory pool's singly linked list.
     MemNodeClass *Next;
 
     // Functions
 
+    // Initialize the member variables.
     void Initialize(int numBytesRequested, MemMgrClass *memMgrPool);
 
+    // Returns true if the Signature member variable contains the correct signature.
     bool SignatureMatches();
 
+    // Returns true if the arg points to the proper memory pool. Note: Tics
+    // uses only one pool for memory mgmt, so in a sense, this function is not really needed.
     bool MemMgrMatches(MemMgrClass *memMgrPool);
 };
 
@@ -1063,7 +1094,8 @@ class MemNodeClass : public NodeHeaderClass
   public:
     // Data
 
-    // The offset from the MemNode base to the start of the user memory.
+    // The offset from the MemNode base to the start of the user memory. The overridden C++ new
+    // operator returns a pointer to this area of the allocated block.
     unsigned int StartOfUserArea;
 
     // Functions
@@ -1088,8 +1120,6 @@ class MemNodeClass : public NodeHeaderClass
     }
 };
 
-// Singly linked list class used as the memory pool for the blocks managed by
-// the MemMgrClass.
 //-----------------------------------------------------------------------------
 // MemNodeListClass
 //
@@ -1120,8 +1150,10 @@ class MemNodeListClass : public TicsBaseClass
     // Returns true if the list is empty.
     bool IsEmpty() { return NumNodesInList == 0; }
 
+    // Adds a "deleted" node back into the memory pool. Used to recycle a freed up node.
     void Add(MemNodeClass *item);
 
+    // Removes a block from the memory pool. Used to allocate a node.
     MemNodeClass *Remove(int numBytesRequested);
 };
 
@@ -1158,10 +1190,15 @@ class MemMgrClass : public TicsBaseClass
   private:
     // Functions
 
+    // Returns a chunk of memory from the Tics memory area.
     MemNodeClass *AllocateFromMemory(int numBytesRequested);
 
+    // Removes a block of memory of the requested size from the memory pool, if the proper size
+    // block is found, otherwise 0 is returned.
     MemNodeClass *AllocateFromList(int numBytesRequested);
 
+    // Returns the actual number of bytes needed to create a properly aligned memory block which
+    // includes the header.
     int NumBytesToAllocate(int numBytesRequested);
 
   public:
@@ -1170,8 +1207,10 @@ class MemMgrClass : public TicsBaseClass
     // Constructor
     MemMgrClass(void *memory, int memorySizeInBytes);
 
+    // Allocates a memory block of the requested size.
     void *Allocate(int numBytesRequested);
 
+    // Adds a memory block back into the memory pool.
     void DeAllocate(void *p);
 };
 
@@ -1208,7 +1247,7 @@ StackType *GetTaskStackPointer();
 void Schedule(TaskClass *task, bool inIsr = false);
 
 //-----------------------------------------------------------------------------
-/// IsrPacketClass
+/// IsrPacketClass (Unused artifact)
 ///
 /// Defines the format of the isr packet which is used to send deferred interrupt
 /// processing data from an isr to the InterfaceFifo.

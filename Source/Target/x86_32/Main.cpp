@@ -100,8 +100,9 @@ using namespace TicsNameSpace;
 class HelloTaskClass : public TaskClass
 {
   public:
-    HelloTaskClass(const char *name) : TaskClass(name) {}
     // Functions
+
+    HelloTaskClass(const char *name) : TaskClass(name) {}
     void Task();
 };
 
@@ -121,7 +122,7 @@ void HelloTaskClass::Task(void)
     while (true)
     {
         // Output the string followed by a counter value.
-        cout << "Hello World! " << Id << " " << flush; //<< endl;
+        cout << "Hello World! " << i << endl;
 
         // Sleep for one second.
         Pause(1000);
@@ -137,12 +138,6 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
-    HelloTask = new HelloTaskClass("Hello");
-    HelloTask = new HelloTaskClass("Hello");
-    HelloTask = new HelloTaskClass("Hello");
-    HelloTask = new HelloTaskClass("Hello");
-    HelloTask = new HelloTaskClass("Hello");
-    HelloTask = new HelloTaskClass("Hello");
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.

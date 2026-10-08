@@ -122,7 +122,8 @@ static SysTickMemMap *const SysTickPeripheral = (SysTickMemMap *)SysTickBaseAddr
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Configures and enables the hardware internal SysTick exception framework.
+/// \brief Configures and enables the hardware internal SysTick exception
+/// framework.
 //-----------------------------------------------------------------------------
 void TargetSysTickInit()
 {
