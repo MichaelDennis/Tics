@@ -1890,10 +1890,12 @@ void MemCopy(void *dst, void *src, int numChars)
     }
 
     // Check for overlap.
-    // The copy is only sSafe if:
-    //   dst >= src + numChars   OR   src >= dst + numChars
-    // Otherwise regions overlap in a forward-copy-unsafe way.
-    if (!(d >= s + numChars || s >= d + numChars))
+    // The copy is only safe if:
+    //   dst > src + numChars   OR   src > dst + numChars
+    // Otherwise regions overlap in a forward-copy-unsafe way.  We purposely use ">" instead
+    // of ">=" in case the user wants to copy only the chars of a null terminated string,
+    // otherwise, the terminating of src will be overwritten, thus corrupting the src buffer.
+    if (!(d > s + numChars || s > d + numChars))
     {
         ErrorHandler.Report(ErrorMsgOverlapInMemCopy);
     }
@@ -1901,6 +1903,7 @@ void MemCopy(void *dst, void *src, int numChars)
     // Copy loop.
     for (int i = 0; i < numChars; i++)
     {
+        // Copy bytes from src to dst, one by one.
         *d++ = *s++;
     }
 }
@@ -1996,9 +1999,9 @@ void MemSet(void *dst, int numChars, char data)
 ///
 /// \param slotSizeInBytes - The size of the fifo array item (slot).
 /// \param numSlots - The number of array items in the fifo.
-/// \param fifoSpace - A pointer to an area at least
-/// (slotSizeInBytes *numSlots) in size that will house the fifo slots. If
-/// this parameter is 0, then the constructor will allocate space.
+/// \param fifoSpace - A pointer to an area at least (slotSizeInBytes *numSlots)
+/// in size that will house the fifo slots. If this parameter is 0, then the
+/// constructor will allocate space.
 ///
 /// Note: At present the fifoSpace pointer is ignored. Tics always
 /// creates fifos dynamically.
@@ -2031,6 +2034,7 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
     FifoSizeInBytes = SlotSizeInBytes * NumSlots;
 
     // Allocate fifo memory if the user did not specify it.
+    // MDM This if test should be removed when the FifoSpace arg is removed.
     if (FifoSpace == 0)
     {
         // Allocate fifo space.
@@ -2056,9 +2060,6 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
 
     // Point front and rear pointers to the first item in the fifo.
     Front = Rear = FifoSpace;
-
-    // Init the number of items in the fifo.
-    NumItemsInFifo = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -2066,6 +2067,7 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
 ///
 /// Free the fifo array space if it was allocated (as opposed to being provided
 /// in the constructor parameter list).
+/// Modify this comment and the code below when allocation by the user is removed.
 //-----------------------------------------------------------------------------
 FifoClass::~FifoClass()
 {
@@ -2081,7 +2083,8 @@ FifoClass::~FifoClass()
 /// the end of the fifo array is reached.
 ///
 /// This function is used by the Add and Remove methods to advance the front
-/// and rear pointers.
+/// and rear pointers to point to the next fifo slot, and wrap around when the
+/// current pointer points the the last byte in the fifo.
 ///
 /// \param item -	The pointer to increment.
 /// \returns		Returns the incremented pointer with wrap-around applied
@@ -2121,9 +2124,6 @@ void FifoClass::Add(void *item)
 
     // Copy the item to the slot.
     MemCopy(Rear, item, SlotSizeInBytes);
-
-    // Bump the number of items in the fifo.
-    NumItemsInFifo++;
 }
 
 //-----------------------------------------------------------------------------
@@ -2131,7 +2131,7 @@ void FifoClass::Add(void *item)
 ///
 /// \param item - A pointer to where the removed item should be copied.
 ///
-/// \return Zero if the fifo is empty, otherwise, a pointer to the removed item.
+/// \return A pointer to the removed item.
 //-----------------------------------------------------------------------------
 void *FifoClass::Remove(void *item)
 {
@@ -2144,9 +2144,6 @@ void *FifoClass::Remove(void *item)
 
     // Advance to the next item.
     Front = Bump(Front);
-
-    // Update the number of items in the fifo.
-    NumItemsInFifo--;
 
     // Copy the slot to the item.
     MemCopy(item, Front, SlotSizeInBytes);
@@ -2184,7 +2181,20 @@ bool FifoClass::IsFull()
 //-----------------------------------------------------------------------------
 /// \brief Returns the number of items in the fifo.
 //-----------------------------------------------------------------------------
-int FifoClass::NumItems() { return NumItemsInFifo; }
+int FifoClass::NumItems()
+{
+    unsigned int numItems;
+    unsigned int front = (unsigned int)Front;
+    unsigned int rear = (unsigned int)Rear;
+
+    // Compute the modular difference in bytes.
+    numItems = ModularSubtract(front, rear, NumSlots);
+
+    // Compute the modular difference in slots.
+    numItems /= SlotSizeInBytes;
+
+    return numItems;
+}
 
 //-----------------------------------------------------------------------------
 /// \brief Performs all necessary fifo resets.
@@ -2772,7 +2782,6 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 /// which is only one word in size, and call the C++ member function from within
 /// the trampoline function.
 //-----------------------------------------------------------------------------
-
 void TrampolineToNewTask()
 {
     // Update the current task to the task we are now starting.
@@ -2786,6 +2795,37 @@ void TrampolineToNewTask()
 
     // If we come here, have returned from a task, which is not allowed.
     ErrorHandler.Report(ErrorMsgAttemptToReturnFromATask);
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Computes the modular difference between two numbers.
+///
+/// Given the args a and b, compute the modular difference of a - b.
+///
+/// \param a The minuend (leftmost number).
+/// \param b The subtrahend (rightmost number).
+///
+/// \return Returns the modular difference a - b.
+//-----------------------------------------------------------------------------
+
+unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus)
+{
+    unsigned int modularDiff;
+
+    // Use conventional subtraction if a > b.
+    if (a >= b)
+    {
+        // Compute the modular difference if a is larger..
+        modularDiff = a - b;
+    }
+    else
+    {
+        // Compute the modular difference if a is smaller.
+        modularDiff = (a + modulus) - b;
+    }
+
+    // Return the modular difference.
+    return modularDiff;
 }
 
 //-----------------------------------------------------------------------------

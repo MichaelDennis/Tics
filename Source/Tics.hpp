@@ -759,9 +759,6 @@ class FifoClass : public TicsBaseClass
     // The total size of the fifo space in bytes.
     int FifoSizeInBytes;
 
-    // The number of items currently in the fifo.
-    int NumItemsInFifo;
-
     // Functions
 
   private:
@@ -1245,6 +1242,7 @@ void Send(TaskClass *task, FifoClass *fifo, void *data);
 void TargetInit();
 StackType *GetTaskStackPointer();
 void Schedule(TaskClass *task, bool inIsr = false);
+unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus);
 
 //-----------------------------------------------------------------------------
 /// IsrPacketClass (Unused artifact)
