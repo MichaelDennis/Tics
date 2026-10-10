@@ -735,9 +735,6 @@ class FifoClass : public TicsBaseClass
         DefaultNumFifoItems = 16
     };
 
-    // Flag to indicate that the fifo space was dynamically allocated.
-    bool FifoSpaceWasAllocated;
-
     // Pointer to the oldest item in the fifo. Items are removed from the front.
     void *Front;
 
@@ -767,7 +764,7 @@ class FifoClass : public TicsBaseClass
 
   public:
     // Constructor.
-    FifoClass(int itemSizeInBytes, int numItems = NumInterfaceFifoSlots, void *fifoSpace = 0);
+    FifoClass(int itemSizeInBytes, int numSlots = NumInterfaceFifoSlots);
 
     // Destructor.
     ~FifoClass();

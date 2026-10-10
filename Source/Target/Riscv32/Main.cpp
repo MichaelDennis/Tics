@@ -122,7 +122,7 @@ void HelloTaskClass::Task(void)
 
     while (true)
     {
-        // Output the string "Hello World!World.cpp" followed by a counter value.
+        // Output the string "Hello World!" followed by a counter value.
         cout << "Hello World! " << i++ << endl;
 
         // Sleep for one second.
@@ -136,7 +136,6 @@ void HelloTaskClass::Task(void)
 int main()
 {
     // Create the hello task.
-
     HelloTask = new HelloTaskClass("Hello");
 
     // Start tasking.

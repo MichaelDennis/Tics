@@ -1892,9 +1892,9 @@ void MemCopy(void *dst, void *src, int numChars)
     // Check for overlap.
     // The copy is only safe if:
     //   dst > src + numChars   OR   src > dst + numChars
-    // Otherwise regions overlap in a forward-copy-unsafe way.  We purposely use ">" instead
-    // of ">=" in case the user wants to copy only the chars of a null terminated string,
-    // otherwise, the terminating of src will be overwritten, thus corrupting the src buffer.
+    // Otherwise regions overlap. We purposely use ">" instead of ">=" in case
+    // the user wants to copy only the chars of a null terminated string, otherwise,
+    // the terminating null of src will be overwritten, thus corrupting the src buffer.
     if (!(d > s + numChars || s > d + numChars))
     {
         ErrorHandler.Report(ErrorMsgOverlapInMemCopy);
@@ -1998,30 +1998,14 @@ void MemSet(void *dst, int numChars, char data)
 /// \brief Fifo class constructor.
 ///
 /// \param slotSizeInBytes - The size of the fifo array item (slot).
-/// \param numSlots - The number of array items in the fifo.
-/// \param fifoSpace - A pointer to an area at least (slotSizeInBytes *numSlots)
-/// in size that will house the fifo slots. If this parameter is 0, then the
-/// constructor will allocate space.
-///
-/// Note: At present the fifoSpace pointer is ignored. Tics always
-/// creates fifos dynamically.
+/// \param numSlots - The number of slots in the fifo.
 //-----------------------------------------------------------------------------
-FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
-    : FifoSpaceWasAllocated(false), FifoSpace(fifoSpace)
+FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
 {
     // We must have at least 2 slots. One is wasted, the other holds data.
     if (numSlots < 2)
     {
         ErrorHandler.Report(ErrorMustHaveAtLeastTwoFifoSlots);
-    }
-
-    // Currently, Tics must allocate all fifo space dynamically, so if the user
-    // specifies fifo space, generate an error. Eventually, the fifoSpace arg will
-    // be removed.
-    if (fifoSpace != 0)
-    {
-        // Users cannot provide fifo space.
-        ErrorHandler.Report(ErrorMsgUserCannotProvideFifoSpace);
     }
 
     // Assign slot size.
@@ -2033,26 +2017,13 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
     // The number of bytes in the fifo.
     FifoSizeInBytes = SlotSizeInBytes * NumSlots;
 
-    // Allocate fifo memory if the user did not specify it.
-    // MDM This if test should be removed when the FifoSpace arg is removed.
+    // Allocate fifo space.
+    FifoSpace = MemMgr.Allocate(FifoSizeInBytes);
+
+    // Check for errors.
     if (FifoSpace == 0)
     {
-        // Allocate fifo space.
-        FifoSpace = MemMgr.Allocate(FifoSizeInBytes);
-
-        // Check for errors.
-        if (FifoSpace == 0)
-        {
-            ErrorHandler.Report(ErrorCannotAllocateFifoMemory);
-        }
-
-        // Remember that we allocated fifo space.
-        FifoSpaceWasAllocated = true;
-    }
-    else
-    {
-        // Remember that we did not allocate fifo space.
-        FifoSpaceWasAllocated = false;
+        ErrorHandler.Report(ErrorCannotAllocateFifoMemory);
     }
 
     // Point to the last fifo byte. Used to determine when to wrap around the fifo pointers.
@@ -2065,28 +2036,22 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots, void *fifoSpace)
 //-----------------------------------------------------------------------------
 /// \brief Fifo class destructor
 ///
-/// Free the fifo array space if it was allocated (as opposed to being provided
-/// in the constructor parameter list).
-/// Modify this comment and the code below when allocation by the user is removed.
+/// Free the allocated fifo space.
 //-----------------------------------------------------------------------------
 FifoClass::~FifoClass()
 {
     // Free the fifo space that was allocated in the constructor.
-    if (FifoSpaceWasAllocated)
-    {
-        MemMgr.DeAllocate(FifoSpace);
-    }
+    MemMgr.DeAllocate(FifoSpace);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Increment the parameter and return it, applying wrap-around when
-/// the end of the fifo array is reached.
+/// \brief Increment the parameter to the next fifo slot.
 ///
 /// This function is used by the Add and Remove methods to advance the front
 /// and rear pointers to point to the next fifo slot, and wrap around when the
-/// current pointer points the the last byte in the fifo.
+/// current pointer points to the last byte in the fifo.
 ///
-/// \param item -	The pointer to increment.
+/// \param item -	The pointer, (either Front or Rear) to be incremented.
 /// \returns		Returns the incremented pointer with wrap-around applied
 ///					as necessary.
 //-----------------------------------------------------------------------------
@@ -2135,7 +2100,7 @@ void FifoClass::Add(void *item)
 //-----------------------------------------------------------------------------
 void *FifoClass::Remove(void *item)
 {
-    // If there are no items in the fifo, then return.
+    // If there are no items in the fifo, then error.
     if (IsEmpty())
     {
         // No items to remove.
@@ -2145,9 +2110,10 @@ void *FifoClass::Remove(void *item)
     // Advance to the next item.
     Front = Bump(Front);
 
-    // Copy the slot to the item.
+    // Copy the contents of the slot that Front points to to the item address.
     MemCopy(item, Front, SlotSizeInBytes);
 
+    // Return the item address, which remains unchanged.
     return item;
 }
 
@@ -2815,7 +2781,7 @@ unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulu
     // Use conventional subtraction if a > b.
     if (a >= b)
     {
-        // Compute the modular difference if a is larger..
+        // Compute the modular difference if a is larger.
         modularDiff = a - b;
     }
     else
