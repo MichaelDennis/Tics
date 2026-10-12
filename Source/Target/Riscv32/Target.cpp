@@ -91,52 +91,23 @@ void TargetInit()
 //-----------------------------------------------------------------------------
 TimerTickType GetSystemTickCount()
 {
-    // Persistent storage for the last sampled clock edge, measured in raw ticks (1 tick = 100
-    // nanoseconds / 0.1 microseconds).
     static uint32_t lastRawHardwareTicks = 0;
-
-    // Accumulation bucket for fractional tick remainders that have passed since the last whole
-    // millisecond boundary.
     static uint32_t subMsTicksBucket = 0;
-
-    // Global monotonic system timeline counting upward, measured in whole milliseconds (1 ms =
-    // 1,000,000 nanoseconds).
     static uint32_t freeRunningMsCounter = 0;
 
-    // Sample the hardware timer tracking address.
     uint32_t currentRawHardwareTicks = *Rv32ClintMtimeAddr;
-
-    // Calculate the raw ticks elapsed since the last function execution, natively handling any
-    // 32-bit integer overflows.
     uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
-
-    // Cache the most recent hardware clock snapshot into permanent memory to establish the baseline
-    // for the next poll pass.
+    
     lastRawHardwareTicks = currentRawHardwareTicks;
-
-    // Deposit the freshly harvested slice of raw execution ticks directly into the sub-millisecond
-    // remainder storage bucket.
     subMsTicksBucket += elapsedTicks;
 
-    // Check if the accumulated remainder bucket contains enough raw energy to cross at least a
-    // single 1 millisecond threshold.
-    if (subMsTicksBucket >= 10000)
+    // Drain the accumulated remainder bucket using subtraction loops to avoid math emulation subroutines.
+    while (subMsTicksBucket >= 10000)
     {
-        // Execute direct integer division to compute exactly how many whole milliseconds have
-        // elapsed (10,000 raw ticks = 1 ms).
-        uint32_t msPassed = subMsTicksBucket / 10000;
-
-        // Advance the master free-running clock timeline by the exact number of verified whole
-        // milliseconds that just passed.
-        freeRunningMsCounter += msPassed;
-
-        // Apply a modulo operation to cleanly drain the consumed milliseconds and preserve the
-        // remaining fractional ticks.
-        subMsTicksBucket %= 10000;
+        freeRunningMsCounter++;
+        subMsTicksBucket -= 10000;
     }
 
-    // Cast the permanent 32-bit millisecond tracking integer to your customized type definition and
-    // return it to the scheduler.
     return (TimerTickType)freeRunningMsCounter;
 }
 
