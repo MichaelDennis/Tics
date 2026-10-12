@@ -31,6 +31,7 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
+#include "Tests.hpp"
 #include "Tics.hpp"
 #include <iostream>
 
@@ -45,29 +46,14 @@ using namespace std;
 using namespace TicsNameSpace;
 
 //-----------------------------------------------------------------------------
-// Test  example.
+// Test example.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Define the Test Task class - you must inherit from TaskClass and
-// implement the virtual function "Task".
-//-----------------------------------------------------------------------------
-class TestTaskClass : public TaskClass
-{
-  public:
-    // Data
-
-    // Functions
-    TestTaskClass(const char *name) : TaskClass(name) {}
-    void TestMsgPriorities();
-    void BlowUpStack();
-    void Task();
-};
-
-//-----------------------------------------------------------------------------
-// Pointer to the Test task. Used in main() to create the Test task.
+// Task pointers.
 //-----------------------------------------------------------------------------
 TestTaskClass *TestTask;
+TestFifoClass *FifoTask;
 
 //-----------------------------------------------------------------------------
 // Intentionally forces an infinite recursion loop to deliberately blow up the
@@ -132,6 +118,7 @@ void TestTaskClass::Task(void)
         // Wait for a start testing msg.
         Wait(StartMsg);
 
+        FifoTask->Test();
         TestTask->TestMsgPriorities();
     }
 }
@@ -140,16 +127,6 @@ void TestTaskClass::Task(void)
 
 int main()
 {
-    // Create the test object.
-    TestTask = new TestTaskClass("TestTask");
-
-    // Blowup the stack.
-    // TestTask->BlowUpStack();
-
-    // Create the Test task.
-    TestTask = new TestTaskClass("Test");
-
-    // Send a msg to get things started.
     TicsSystemTask.Send(TestTask, StartMsg);
 
     // Start tasking.

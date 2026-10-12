@@ -2011,6 +2011,9 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
     // Assign slot size.
     SlotSizeInBytes = slotSizeInBytes;
 
+    // Adjust slot size to a multiple of a size that is a multiple of sizeof(int);
+    SlotSizeInBytes = RoundUpToSizeofInt(SlotSizeInBytes);
+
     // Assign the total number of slots in the fifo, including the unused slot.
     NumSlots = numSlots;
 
@@ -2792,6 +2795,31 @@ unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulu
 
     // Return the modular difference.
     return modularDiff;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief Rounds a number bytes up to a byte count that is a multiple of
+/// sizeof(int) (typically 4).
+///
+/// \param numBytes - The number of bytes to increase to a multiple of
+/// sizeof(int).
+///
+/// \return Returns the adjusted byte count.
+//-----------------------------------------------------------------------------
+
+int RoundUpToSizeofInt(int numBytes)
+{
+    int adjustedByteCount;
+    int mask;
+
+    // Get the mask, which is also used move to the next highest multiple of sizeof(int).
+    mask = sizeof(int) - 1;
+
+    // Adjust the data size to be a multiple of Sizeof(int).
+    adjustedByteCount = (numBytes + mask) & ~(mask);
+
+    // Return the size adjusted to a multiple of sizeof(int).
+    return adjustedByteCount;
 }
 
 //-----------------------------------------------------------------------------

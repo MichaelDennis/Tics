@@ -764,7 +764,7 @@ class FifoClass : public TicsBaseClass
 
   public:
     // Constructor.
-    FifoClass(int itemSizeInBytes, int numSlots = NumInterfaceFifoSlots);
+    FifoClass(int slotSizeInBytes, int numSlots = NumInterfaceFifoSlots);
 
     // Destructor.
     ~FifoClass();
@@ -1240,28 +1240,7 @@ void TargetInit();
 StackType *GetTaskStackPointer();
 void Schedule(TaskClass *task, bool inIsr = false);
 unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus);
-
-//-----------------------------------------------------------------------------
-/// IsrPacketClass (Unused artifact)
-///
-/// Defines the format of the isr packet which is used to send deferred interrupt
-/// processing data from an isr to the InterfaceFifo.
-//-----------------------------------------------------------------------------
-class IsrPacketClass
-{
-  public:
-    // Pointer to the task that processes HandlerData.
-    TaskClass *HandlerTask;
-
-    // Pointer to the isr data that the HandlerTask will process.
-    void *HandlerData;
-
-    // When HandlerTask finishes processing the HandlerData, it sends a msg
-    // to HandlerMemMgr to let it know that it can free the data block pointed to
-    // by HandlerData.
-    TaskClass *HandlerMemMgr;
-};
-
+int RoundUpToSizeofInt(int count);
 //-----------------------------------------------------------------------------
 // End TicsNameSpace.
 //-----------------------------------------------------------------------------
