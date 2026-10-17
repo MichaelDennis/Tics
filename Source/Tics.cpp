@@ -24,7 +24,7 @@ SOFTWARE.
 
 //-----------------------------------------------------------------------------
 //
-// Copyright (c) 2024, Tics Realtime (Michael McDonnell)
+// Copyright (c) 2026, Tics Realtime (Michael McDonnell)
 //
 //-----------------------------------------------------------------------------
 
@@ -33,7 +33,6 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
 #include <stdint.h>
-#include <stdlib.h>
 
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
@@ -104,12 +103,13 @@ FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 ErrorHandlerClass ErrorHandler;
 
 // Dummy task used as the CurrentTask when the first task after power-on is run.
-DummyTaskClass DummyTask("DummyTask)");
+DummyTaskClass DummyTask("DummyTask");
 
 // Pointer to the task that is currently running. Initially we point it to a dummy task.
 TaskClass *CurrentTask = &DummyTask;
 
-// The StartupTask is a dummy task that serves as CurrentTask during the first TaskSwitch.
+// The StartupTask is a task that serves as NextTask during the first call
+// to Suspend().
 StartupTaskClass StartupTask("StartupTask");
 
 //-----------------------------------------------------------------------------
@@ -126,10 +126,16 @@ StartupTaskClass StartupTask("StartupTask");
 /// \param stackPadSizeInBytes - The pad is an area at the bottom of stack memory.
 /// Any writes to this area will generate an error.
 ///
-/// Note: This function may reduce the stack size toa smaller value.
+/// Note: This function may reduce the stack size to a smaller value.
 //-----------------------------------------------------------------------------
 StackClass::StackClass(int stackSizeInBytes, int stackPadSizeInBytes)
 {
+    // Check the stack size.
+    if (StackSizeIsValid(stackSizeInBytes) == false)
+    {
+        ErrorHandler.Report(ErrorMsgInvalidStackSize);
+    }
+
     // SavedSp is used to save the SP of the task being switched out.
     SavedSp = 0;
 
@@ -626,7 +632,6 @@ void DelayListClass::CheckForTimeouts()
     MsgClass *nextMsg;
     TimerTickType currentTime;
     int dtCurrent;
-    int dtNext;
 
     // If the list is empty, we have no timers to process.
     if (IsEmpty())
@@ -683,9 +688,6 @@ void DelayListClass::CheckForTimeouts()
         }
     }
 
-    // Read the current clock tick.
-    currentTime = ReadTickCount();
-
     // Save for the next time we enter this function.
     LastTime = currentTime;
 }
@@ -699,6 +701,28 @@ bool ListClass::IsEmpty(void)
 {
     // If the msg count is 0, then there are no msgs in the list.
     return NumNodesInList == 0;
+
+    /* Here is a safer alternate:
+
+    bool ListClass::IsEmpty(void)
+{
+    // Check if the counter and Head/Tail pointers don't agree.
+    if ((NumNodesInList == 0) && (Head->Next != Tail) ||
+    (NumNodesInList > 0) && (Head->Next == Tail))
+    {
+        ErrorHandler.Report(ErrorListCounterMismatch);
+    }
+
+    // NumNodesInList is assumed valid at this point, so return accordingly.
+    if (NumNodesInList == 0) {
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+    */
 }
 
 //-----------------------------------------------------------------------------
@@ -710,6 +734,16 @@ bool ListClass::IsNotEmpty(void)
 {
     // If the msg count is not 0, then there are msgs in the list.
     return NumNodesInList != 0;
+
+    /*
+    Safer alternate
+
+    bool ListClass::IsNotEmpty(void)
+{
+    return !IsEmpty();
+}
+
+    */
 }
 
 //-----------------------------------------------------------------------------
@@ -764,10 +798,8 @@ NodeClass *ListClass::Remove(NodeClass *a)
 //-----------------------------------------------------------------------------
 /// \brief Checks for the existence of a task object in the Task List.
 ///
-/// The Task List contains a list of msgs whose Receiver field points
-/// to an active task. This function traverses the task list looking for a match
-/// between the task and msg->Receiver. Although this is a
-/// general MsgListClass function, it is typically applied only to TaskList.
+/// This function traverses the master TaskList looking for a direct pointer
+/// match with the indicated task object.
 ///
 /// \param task - A pointer to the task object to match.
 /// \param id - The node id. If non-zero, it is used as a double check. If
@@ -910,11 +942,10 @@ ListClass::ListClass(int maxNodes) : MaxNodes(maxNodes)
 /// the objects from the fifo. The isr must use this function to send data
 /// to a task, if that is required. The preferred method is for the isr to handle
 /// all necessary work, but if work must be deferred to a task, then this function
-/// must be used. When the task runs, it retrieves the data
-/// from the fifo, either directly or by using function
-/// TaskClass::Wait(FifoClass *fifo, void *data). For this to work, the isr must know
-/// which fifo and which task to send the msg to, and the task must know to wait
-/// for the appropriate fifo msg.
+/// must be used. When the task runs, it retrieves the data from the fifo by
+/// using TaskClass::Wait(FifoClass *fifo, void *data). For this to work, the
+/// isr must know which fifo and which task to send the msg to, and the task must
+/// know to wait for the appropriate fifo msg.
 ///
 /// \param task - The task to send the data to.
 /// \param fifo - The task's fifo.
@@ -933,13 +964,13 @@ void Send(TaskClass *task, FifoClass *fifo, void *data)
     // exact same size as the slot. See Interrupts.cpp in the Examples folder.
     fifo->Add(data);
 
-    // Add the task pointer to the Interface Fifo by calling Schedule().
-    // Note that there are two fifos, the Data fifo, which contains
+    // Calling Schedule(task, true) adds a pointer to the task into the
+    // Interface Fifo. Note that there are two fifos, the Data fifo, which contains
     // the msg sent to the handler task, and the Interface Fifo which contains
     // a pointer to the handler task. The Interface Fifo is checked at
-    // each context switch, and if a task is found in the Interface Fifo,
-    // the task is scheduled to run by calling Schedule() so that the handler
-    // task can pull the data from the Data Fifo.
+    // each context switch, and if a task pointer is found in the Interface Fifo,
+    // the task is added to the ReadyList by calling Schedule(task, false) so that
+    // the handler task can run and pull the data from the Data Fifo.
     Schedule(task, true);
 }
 
@@ -1028,7 +1059,7 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
 TimerTickType ReadTickCount() { return GetSystemTickCount(); }
 
 //-----------------------------------------------------------------------------
-/// \brief Add the indicated task to the Ready List.
+/// \brief Add the indicated task to the Ready List or the InterruptFifo.
 ///
 /// The Schedule function is for Tics internal use only. At the user level,
 /// the only approved way to schedule a task is to send a msg to it.
@@ -1056,7 +1087,7 @@ void Schedule(TaskClass *task, bool inIsr)
     if (inIsr)
     {
         // Schedule the task by adding it to the InterfaceFifo, rather
-        // than the Ready List, to avoid list corruption.
+        // than the Ready List to avoid list corruption.
         // All interrupts must remain disabled while within the isr,
         // otherwise the InterfaceFifo can be corrupted.
         // The InterfaceFifo is checked at each context switch.
@@ -1158,14 +1189,8 @@ void Suspend()
 TaskClass::TaskClass(const char *name, int priority, int flags, int stackSizeInBytes)
     : Name(name), Priority(priority), Flags(flags), Stack(stackSizeInBytes)
 {
-    // Check the stack size.
-    if (Stack.StackSizeIsValid(stackSizeInBytes) == false)
-    {
-        ErrorHandler.Report(ErrorMsgInvalidStackSize);
-    }
-
-    // Check the priority.
-    if (UserPriorityIsValid(priority) == false)
+    // If the priority is not valid...
+    if (!InRange(MinPriority, MaxPriority, priority))
     {
         ErrorHandler.Report(ErrorMsgInvalidPriority);
     }
@@ -1173,21 +1198,21 @@ TaskClass::TaskClass(const char *name, int priority, int flags, int stackSizeInB
     // Add the task to the list of active tasks.
     TaskList.Add(this);
 
+    // Prime the stack. Fake out the task's "previous" call to TaskSwitch(). See PrimeStack() for
+    // details. Note that the first time "resuming" the task, there is no previous task context that
+    // was saved. So we fake it out by pushing data onto the stack.
+    Stack.PrimeStack();
+
     // Schedule this task if we're allowed to do so.
     if (Flags.IsSet(ScheduleTaskOnCreationFlag))
     {
         Schedule(this);
     }
-
-    // Prime the stack. Fake out the task's "previous" call to TaskSwitch(). See PrimeStack() for
-    // details. Note that the first time "resuming" the task, there is no previous task context that
-    // was saved. So we fake it out by pushing data onto the stack.
-    Stack.PrimeStack();
 }
 
 //-----------------------------------------------------------------------------
 /// \brief TaskClass destructor. Removes all references to this task, then
-/// Removes the task itself from the task list.
+/// removes the task itself from the task list.
 //-----------------------------------------------------------------------------
 TaskClass::~TaskClass()
 {
@@ -1197,7 +1222,8 @@ TaskClass::~TaskClass()
         ErrorHandler.Report(ErrorAttemptToDeleteANonExistentTask);
     }
 
-    // Although a task can delete itself, we recommend against it. Have another task delete it.
+    // Although a task can delete itself, we recommend against it. Have another task
+    // delete it or add the task to the DeleteList().
     if (CurrentTask == this)
     {
         ErrorHandler.Report(ErrorAttemptToDeleteTheCurrentTask);
@@ -1221,7 +1247,7 @@ TaskClass::~TaskClass()
     // Remove all occurrences of this task object from the Ready List.
     ReadyList.RemoveTaskReferences(this);
 
-    // Check TaskList integrity.
+    // Check DelayList integrity.
     DelayList.CheckListIntegrity();
 
     // Remove all occurrences of this task object from the DelayList.
@@ -1230,6 +1256,9 @@ TaskClass::~TaskClass()
     // Check TaskList integrity.
     TaskList.CheckListIntegrity();
 
+    // Check the InterfaceFifo for any occurrences of this task.
+    // InterfaceFifo.RemoveTaskReferences(task);
+
     //"Remove()" unlinks the task itself from the TaskList, but it does not delete it.
     // The actual "deletion" of the task is done by the delete operator itself,
     // which is the code that called this destructor.
@@ -1237,36 +1266,6 @@ TaskClass::~TaskClass()
 
     // The node Id will be bumped in the TicBaseClass, so no need to bump it here.
     // Bumping (incrementing) the Id marks the node (TaskClass instance) as changed.
-}
-
-//-----------------------------------------------------------------------------
-/// \brief Remove all references to the task from this task's msg list.
-///
-/// \param task - The task that we want to remove from this task's msg list.
-//-----------------------------------------------------------------------------
-void TaskClass::DeleteFromMsgList(TaskClass *task)
-{
-    NodeClass *nextNode;
-    MsgClass *msg;
-
-    for (NodeClass *node = MsgList.Head->Next; node != MsgList.Tail; node = nextNode)
-    {
-        // Save for use in the for-loop.
-        nextNode = node->Next;
-
-        // Convert to msg.
-        msg = (MsgClass *)node;
-
-        // If the task is referenced, by either Sender or Receiver, remove it.
-        if (msg->Receiver == task || msg->Sender == task)
-        {
-            // Remove the msg that references the task from the task's msg list.
-            MsgList.Remove(msg);
-
-            // Delete the msg that references the task from the task's msg list.
-            delete msg;
-        }
-    }
 }
 
 //-----------------------------------------------------------------------------
@@ -1314,7 +1313,7 @@ MsgClass *TaskClass::Pause(int numTicks, int priority)
 /// in the list. If a match is found, no further traversal of the list occurs.
 ///
 /// The msg is available to the current task until it suspends itself
-/// (by waiting for a msg, for example).
+/// (by waiting for a msg, for example) after which it is deleted.
 ///
 /// If the msg number is AnyMsg, then the first msg in the list is returned,
 /// assuming that the list is not empty. In other words, AnyMsg means to
@@ -1382,6 +1381,9 @@ MsgClass *TaskClass::Recv(int msgNum)
 /// \brief Check each msg number in the array and check if it is in the
 /// task's msg list.
 ///
+/// Note: you must have the DropUnexpectedMsgsFlag set to false (the default)
+/// otherwise this function will call the error handler.
+///
 /// \return Return a pointer to the found msg, otherwise, 0.
 ///
 /// Note: this function is experimental; it may be removed.
@@ -1390,6 +1392,12 @@ MsgClass *TaskClass::Recv(int *msgNumArray, int numMsgs)
 {
     int i;
     MsgClass *msg = 0;
+
+    // The DropUnexpectedMsgsFlag is not allowed in this function.
+    if (Flags.IsSet(DropUnexpectedMsgsFlag))
+    {
+        ErrorHandler.Report(ErrorMsgDroppingIsNotAllowedHere1);
+    }
 
     // Check for invalid numMsgs.
     if (numMsgs > MaxAllowedMsgsInRecv)
@@ -1461,6 +1469,9 @@ MsgClass *TaskClass::Wait(int msgNum)
 /// and return to the caller, otherwise, suspend until one of the msg numbers
 /// is found.
 ///
+/// Note: you must have the DropUnexpectedMsgsFlag set to false (the default)
+/// otherwise this function will call the error handler.
+///
 /// \param numMsgs - The number of msgs in msgNumArray.
 ///
 /// \return Returns a pointer to the msg.
@@ -1470,6 +1481,12 @@ MsgClass *TaskClass::Wait(int msgNum)
 MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 {
     MsgClass *msg;
+
+    // The DropUnexpectedMsgsFlag is not allowed in this function.
+    if (Flags.IsSet(DropUnexpectedMsgsFlag))
+    {
+        ErrorHandler.Report(ErrorMsgDroppingIsNotAllowedHere2);
+    }
 
     while (true)
     {
@@ -1494,7 +1511,8 @@ MsgClass *TaskClass::Wait(int *msgNumArray, int numMsgs)
 ///
 /// Attempt to remove a previously sent msg with the given node Id from the system.
 ///
-/// \param id - Obtainable from the msg returned by Send() (msg->Id).
+/// \param msg - A pointer to the msg to delete.
+/// \param id - Optional. Obtainable from the msg returned by Send() (msg->Id).
 ///
 /// \return true if the msg was canceled, otherwise false.
 //-----------------------------------------------------------------------------
@@ -1577,6 +1595,11 @@ void TaskClass::Schedule(TaskClass *task)
 /// Schedule this task to run, (i.e., add it to the Ready List according to
 /// its priority), then suspend it. The task will run again when it bubbles
 /// to the top of the Ready List.
+///
+/// Note: The ReadyList is a list of msgs, not tasks. Adding a task to the
+/// ReadyList is done by creating a msg with the task as msg->Receiver
+/// with the msg's priority set to the priority of the task. See the Schedule
+/// function for details.
 //-----------------------------------------------------------------------------
 void TaskClass::Yield()
 {
@@ -1609,6 +1632,12 @@ void TaskClass::Yield()
 void TaskClass::Reply(MsgClass *receivedMsg, int msgNum, int data, int delay, int priority,
                       TaskClass *sender)
 {
+    // Check for a null pointer.
+    if (receivedMsg == 0)
+    {
+        ErrorHandler.Report(ErrorNullPointerInTaskClassReply);
+    }
+
     // Reply by sending a msg to the sender of the received msg.
     Send(receivedMsg->Sender, msgNum, data, delay, priority, sender);
 }
@@ -1620,6 +1649,12 @@ void TaskClass::Reply(MsgClass *receivedMsg, int msgNum, int data, int delay, in
 //-----------------------------------------------------------------------------
 void MsgClass::Init()
 {
+    // Check for a null pointer.
+    if (Receiver == 0)
+    {
+        ErrorHandler.Report(ErrorReceiverIsNullInMsgClassInit);
+    }
+
     // Remember the receiver task id. Used for error checking.
     ReceiverId = Receiver->Id;
 }
@@ -1641,11 +1676,14 @@ void MsgClass::Init()
 //-----------------------------------------------------------------------------
 MsgClass::MsgClass(TaskClass *receiver, int msgNum, int data, int delay, int priority,
                    TaskClass *sender)
-    : NodeClass(data, priority), ReceiverId(0), MsgNum(msgNum), Data(data), Delay(delay),
-      EndTime(0), Sender(sender), Receiver(receiver)
+    : NodeClass(data, priority), ReceiverId(0), MsgNum(msgNum), Delay(delay), EndTime(0),
+      Sender(sender), Receiver(receiver)
 {
-    // Initialize the msg.
-    Init();
+    // Check msg parameters.
+    CheckParameters();
+
+    // Remember the receiver task id. Used for error checking.
+    ReceiverId = Receiver->Id;
 }
 
 //-----------------------------------------------------------------------------
@@ -1662,33 +1700,31 @@ MsgClass::~MsgClass()
 
 //-----------------------------------------------------------------------------
 /// \brief Check msg parameters.
-///
-/// \param fullCheck - If false, don't check for a receiver or sender.
 //-----------------------------------------------------------------------------
-void MsgClass::CheckParameters(bool fullCheck)
+void MsgClass::CheckParameters()
 {
-    // Check if the Priority is within a valid range.
-    if (InRange(LowPriority, HighPriority, Priority) == false)
+    // If the Priority is not within a valid range...
+    if (!InRange(MinPriority, MaxPriority, Priority))
+    {
+        ErrorHandler.Report(ErrorMsgPriorityIsOutOfRange);
+    }
+
+    // Check if the MsgNum is within a valid range.
+    if (InRange(MinMsgNum, MaxMsgNum, MsgNum) == false)
     {
         ErrorHandler.Report(ErrorMsgPriorityIsOutOfRange);
     }
 
     // Check for an invalid Delay value.
-    if (DelayIsCorrect(Delay) == false)
+    if (Delay < 0 || Delay > MaxTimerSize)
     {
-        ErrorHandler.Report(ErrorBadTimerTickCount);
+        ErrorHandler.Report(ErrorMsgDelayIsOutOfRange);
     }
 
     // Make sure we have a non-zero receiver task.
-    if (fullCheck && Receiver == 0)
+    if (Receiver == 0)
     {
         ErrorHandler.Report(ErrorMsgReceiverTaskPtrIsNull);
-    }
-
-    // Make sure we have a non-zero sender task.
-    if (fullCheck && Sender == 0)
-    {
-        ErrorHandler.Report(ErrorMsgSenderTaskPtrIsNull);
     }
 }
 
@@ -1783,11 +1819,28 @@ bool TaskClass::TaskExists(TaskClass *task)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief The DummyTask.
+///
+/// This task serves as the CurrentTask so that the very first context switch
+// will have a CurrentTask to refer to.
+//-----------------------------------------------------------------------------
+void DummyTaskClass::Task()
+{
+    // Initialize the target hardware.
+    TargetInit();
+
+    while (true)
+    {
+        // Wait for any msg, then let the garbage collector drop it.
+        Wait();
+    }
+}
+
+//-----------------------------------------------------------------------------
 /// \brief The StartupTask.
 ///
-/// This is a dummy task for sole purpose of a task to serve as the
-/// CurrentTask so that the very first context switch will have a CurrentTask
-/// to refer to.
+/// This task serves as the CurrentTask so that the very first context switch
+// will have a CurrentTask to refer to.
 //-----------------------------------------------------------------------------
 void StartupTaskClass::Task()
 {
@@ -1796,8 +1849,8 @@ void StartupTaskClass::Task()
 
     while (true)
     {
-        // Suspend this task and never return.
-        Suspend();
+        // Wait for any msg, then let the garbage collector drop it.
+        Wait();
     }
 }
 
@@ -1805,7 +1858,8 @@ void StartupTaskClass::Task()
 /// \brief The IdleTask constructor.
 ///
 //-----------------------------------------------------------------------------
-IdleTaskClass::IdleTaskClass(const char *name, int priority) : TaskClass(name, priority) {};
+IdleTaskClass::IdleTaskClass(const char *name, int priority, int flags)
+    : TaskClass(name, priority, flags) {};
 
 void IdleTaskClass::Task()
 {
@@ -2513,6 +2567,12 @@ void ListClass::CheckListIntegrity(void)
     {
         ErrorHandler.Report(ErrorNumNodesInListIsInvalid);
     }
+
+    // Check if NumNodesInList is in agreement with Head and Tail pointers.
+    if ((NumNodesInList == 0 && Head->Next != Tail) || (NumNodesInList != 0 && Head->Next == Tail))
+    {
+        ErrorHandler.Report(ErrorListNodeCountMismatch);
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -2582,7 +2642,7 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
 //-----------------------------------------------------------------------------
 bool DelayIsCorrect(TimerTickType delay)
 {
-    if (delay > MaxTimerSize)
+    if (delay < 0 || delay > MaxTimerSize)
     {
         return false;
     }

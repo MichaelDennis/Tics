@@ -23,8 +23,8 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
-// This file provides the low-level RISC-V32 specific hardware initializations,
-// CLINT timer tracking drivers, and context stack layout tools for the Tics RTOS.
+// This file provides code that generates a 1 ms system timer tick used
+// by the Tics RTOS.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
@@ -44,7 +44,8 @@ extern "C"
     // A C function that trampolines to the task function when a task is started.
     void TrampolineToNewTask();
 
-    // Raw low-level assembly query pulling the active hardware stack register.
+    // Assembly language function that returns the value of the current stack pointer.
+    // See it in file Target.s.
     uintptr_t GetStackPointer();
 }
 
@@ -70,8 +71,9 @@ namespace TicsNameSpace
 // Statics
 //-----------------------------------------------------------------------------
 
-// Dereference pointer for the physical, memory-mapped CLINT timer register tracking the continuous
-// 10MHz hardware oscillator.
+// Get a pointer to the raw nanosecond clock tick source. This will be used to
+// compute a running millisecond clock tick in function GetSystemTickCount (see
+// below).
 static volatile uint32_t *const Rv32ClintMtimeAddr = (volatile uint32_t *)0x0200BFF8;
 
 //-----------------------------------------------------------------------------
@@ -79,35 +81,59 @@ static volatile uint32_t *const Rv32ClintMtimeAddr = (volatile uint32_t *)0x0200
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Centralized hardware initialization entry target execution point.
+// This function performs all necessary hardware initializations.
 //-----------------------------------------------------------------------------
 void TargetInit()
 {
-    // Intentionally empty for the RISC-V32 target configuration.
+    // This is a general function to perform any necessary initializations.
+    // No initializations are needed here. Not all hardware targets require
+    // initializations.
 }
 
 //-----------------------------------------------------------------------------
-// Read-interface query layer pulling and accumulating the millisecond system tick count.
+// Update and return the ongoing millisecond system tick count.
 //-----------------------------------------------------------------------------
 TimerTickType GetSystemTickCount()
 {
+    // The hardware tick reading saved from the previous call.
     static uint32_t lastRawHardwareTicks = 0;
+
+    // Any ticks past the ms mark that were saved from the last call.
     static uint32_t subMsTicksBucket = 0;
+
+    // The ongoing count in milliseconds (ms) that is returned to the caller.
+    // This value is saved across calls.
     static uint32_t freeRunningMsCounter = 0;
 
+    // Read the raw hardware tick count in nanoseconds (ns).
     uint32_t currentRawHardwareTicks = *Rv32ClintMtimeAddr;
+
+    // Compute the elapsed tick count since the last reading.
     uint32_t elapsedTicks = currentRawHardwareTicks - lastRawHardwareTicks;
-    
+
+    // Update the last number of raw ticks read.
     lastRawHardwareTicks = currentRawHardwareTicks;
+
+    // Since we read more that 100 ms worth of ticks last time, we saved them
+    // in subMsTicksBucket. Now we update it with the number of elapsed ticks
+    // we just read.
     subMsTicksBucket += elapsedTicks;
 
-    // Drain the accumulated remainder bucket using subtraction loops to avoid math emulation subroutines.
-    while (subMsTicksBucket >= 10000)
+    // if the subMsTicksBucket is >= 10,000, then the elapsed time is 1 or more ms.
+    if (subMsTicksBucket >= 10000)
     {
-        freeRunningMsCounter++;
-        subMsTicksBucket -= 10000;
+        // Compute the elapsed number of ms by dividing by 10,000 ns per ms.
+        uint32_t msPassed = subMsTicksBucket / 10000;
+
+        // Update the ongoing number of elapsed ms.
+        freeRunningMsCounter += msPassed;
+
+        // Save the left over ns count in subMsTicksBucket.
+        subMsTicksBucket %= 10000;
     }
 
+    // Return the ongoing ms count, which may be the same as it was in the last call
+    // depending upon the number of ns that have elapsed since the last call.
     return (TimerTickType)freeRunningMsCounter;
 }
 
@@ -117,7 +143,7 @@ TimerTickType GetSystemTickCount()
 //-----------------------------------------------------------------------------
 StackType *GetTaskStackPointer()
 {
-    // Query the raw, unadjusted hardware stack pointer value from assembly.
+    // Read the raw, unadjusted hardware stack pointer value.
     uintptr_t rawSp = GetStackPointer();
 
     // Return the raw address directly as no stack compensation is needed on RISC-V32.
@@ -129,7 +155,9 @@ StackType *GetTaskStackPointer()
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Primes a newly created task's stack with an initial dummy register context.
+// This function primes a newly created task's stack with dummy values.
+// It doesn't matter what the values are, since the values will be popped into
+// registers that will be overwritten by the task that we context switch into.
 //-----------------------------------------------------------------------------
 void StackClass::PrimeStack()
 {
@@ -149,9 +177,10 @@ void StackClass::PrimeStack()
     *(--sp) = 2;                              // s2 register placeholder.
     *(--sp) = 1;                              // s1 register placeholder.
     *(--sp) = 0;                              // s0 register placeholder.
-    *(--sp) = (StackType)TrampolineToNewTask; // ra return address pointer.
+    *(--sp) = (StackType)TrampolineToNewTask; // The address of the trampoline function.
 
     // Save the finalized stack pointer position to this task's Stack.SavedSp variable.
+    // This value will be loaded into the sp register during a context switch.
     SavedSp = (StackType *)sp;
 }
 

@@ -68,6 +68,21 @@ extern "C" void TaskSwitch(void **currentTaskSavedSp, void *newTaskSavedSp);
 extern "C" TimerTickType GetSystemTickCount();
 
 //-----------------------------------------------------------------------------
+// Forward class declarations
+//-----------------------------------------------------------------------------
+class TaskClass;
+class FifoClass;
+class MemNodeClass;
+class MemMgrClass;
+class ContextSwitchX86GppClass;
+class TicsSystemTaskClass;
+
+//-----------------------------------------------------------------------------
+/// C++ Externals
+//-----------------------------------------------------------------------------
+extern TicsSystemTaskClass TicsSystemTask;
+
+//-----------------------------------------------------------------------------
 // Defines
 //-----------------------------------------------------------------------------
 
@@ -146,7 +161,16 @@ enum NodePriorityEnum
     // Forces the Head to be the first node in the list.
     HeadPriority = 10000,
 
-    // Forces the IdleTask to always be the last msg node in the ReadyList
+    // The DummyTask should run first, so make it the hightest system level priority.
+    DummyTaskPriority = HeadPriority - 1,
+
+    // The StartupTask should run second, so give it a priority 1 less than the DummyTask.
+    StartupTaskPriority = DummyTaskPriority - 1,
+
+    // Most other system tasks run at this priority.
+    SystemTaskPriority = StartupTaskPriority - 1,
+
+    // Force the IdleTask to always be the last msg node in the ReadyList.
     IdleTaskPriority = 1,
 
     // The 3 user priorities.
@@ -156,17 +180,31 @@ enum NodePriorityEnum
 };
 
 //-----------------------------------------------------------------------------
-// Msg numbers
+// --Msg numbers--
+//
+// --Overview--
+//
+// Msg numbers are numbers that identify the purpose of a msg so that the
+// receiver of the msg can determine what action to take. The MsgNum is a
+// data member of the MsgClass.
+//
+// --Msg number range and enum assignment--
+//
+// Msg numbers span the entire int number range, however, currently the
+// valid msg number range is from 0 to 50,000. Tics reserves the right
+// to provide enum definitions for msg numbers 0 - 1999, and the user is free
+// to assign enum definitions to the rest of the range.
+//
+// -- Msg number usage--
+//
+// The user is free to use (but not define) all msg numbers defined by Tics. For
+// example, the user might find it useful to use the Tics defined StartMsg and
+// StopMsg. And of course the user can use all of his own enum defined msgs.
 //-----------------------------------------------------------------------------
 
-// 1. Tics reserves msg numbers 0 to 999.
-// 2. Users can define their own msg numbers in the range MinUserMsgNum to
-// MaxUserMsgNum.
-// 3. The following are predefined msg numbers.
-// 4. All these msg numbers can be used
-//    by the user, except for the following which are reserved by Tics:
-//    ScheduleMsg, AnyMsg
-
+//-----------------------------------------------------------------------------
+// Tics defined msg numbers.
+//-----------------------------------------------------------------------------
 enum MsgNumEnum
 {
     // This must be the first and smallest defined msg number.
@@ -200,15 +238,30 @@ enum MsgNumEnum
     InvalidMsg,
     DataAvailable,
     InterfaceMsg,
+};
 
-    // Users can define their own msg numbers in the range between
-    // MinUserMsgNum and MaxUserMsgNum.
+//-----------------------------------------------------------------------------
+// Valid msg number range
+//-----------------------------------------------------------------------------
+enum
+{
+    // Minimum allowed msg number.
+    MinMsgNum = 0,
 
-    // Minimum allowed user msg number.
-    MinUserMsgNum = 1000,
+    // Maximum allowed msg number.
+    MaxMsgNum = 50000
+};
 
-    // Maximum allowed user msg number.
-    MaxUserMsgNum = 9999
+//-----------------------------------------------------------------------------
+// Valid priority range
+//-----------------------------------------------------------------------------
+enum
+{
+    // Minimum allowed msg number.
+    MinPriority = IdleTaskPriority,
+
+    // Maximum allowed msg number.
+    MaxPriority = DummyTaskPriority
 };
 
 //-----------------------------------------------------------------------------
@@ -255,7 +308,7 @@ enum ErrorMsgEnum
     ErrorStackPadAreaWasWrittenTo = 1033,
     ErrorTheNextTaskToRunPtrIsNull = 1034,
     ErrorTheNextTaskToRunDoesNotExist = 1035,
-    ErrorReturningFromATaskIsNotAllowed = 1036,
+    ErrorMsgDroppingIsNotAllowedHere1 = 1036,
     ErrorMsgListIsFullCannotInsert = 1037,
     ErrorMsgListHeadOrTailCorruption = 1038,
     ErrorMsgListHeadOrTailLinkageIssue = 1039,
@@ -300,7 +353,7 @@ enum ErrorMsgEnum
     ErrorMsgInvalidStackSize = 1078,
     ErrorMsgInvalidPriority = 1079,
     ErrorMsgUnsupportedCpuType = 1080,
-    ErrorMsgAttemptToDeleteANullNode = 1081,
+    ErrorMsgDroppingIsNotAllowedHere2 = 1081,
     ErrorMsgReceiverTaskDoesNotExist = 1082,
     ErrorMsgCouldNotCancelMsg = 1083,
     ErrorMsgNullPointerInMemCompare = 1084,
@@ -313,16 +366,16 @@ enum ErrorMsgEnum
     ErrorMsgInvalidNumCharsInMemSet = 1091,
     ErrorMsgOverlapErrorInMemCopy = 1092,
     ErrorMsgUserCannotProvideFifoSpace = 1093,
+    ErrorNullPointerInTaskClassReply = 1094,
+    ErrorReceiverIsNullInMsgClassInit = 1095,
+    ErrorNullReceiverPointer = 1096,
+    ErrorMsgDelayIsOutOfRange = 1097,
+    ErrorListNodeCountMismatch = 1098,
 };
 
 //-----------------------------------------------------------------------------
-// Class References
+// Tics Class Definitions
 //-----------------------------------------------------------------------------
-class TaskClass;
-class FifoClass;
-class MemNodeClass;
-class MemMgrClass;
-class ContextSwitchX86GppClass;
 
 //-----------------------------------------------------------------------------
 // TicsBaseClass
@@ -461,9 +514,6 @@ class MsgClass : public NodeClass
     /// The message number indicating the action requested of the receiver.
     int MsgNum;
 
-    /// Optional message data (usage is task‑specific).
-    int Data;
-
     /// Optional generic pointer for user usage. //MDM Maybe we remove this.
     void *Ptr;
 
@@ -492,7 +542,7 @@ class MsgClass : public NodeClass
     void Init();
 
     // Validates constructor arguments.
-    void CheckParameters(bool fullCheck = true);
+    void CheckParameters();
 
     // Returns true if the message number matches.
     bool Is(int msgNum) { return msgNum == MsgNum; }
@@ -789,6 +839,8 @@ class FifoClass : public TicsBaseClass
 
     // Resets the front and rear pointers.
     void Reset();
+
+    // Remove references to a
 };
 
 //-----------------------------------------------------------------------------
@@ -803,6 +855,8 @@ class TaskClass : public NodeClass
 
     enum TaskClassEnum
     {
+        // Flags
+
         // If set, unexpected msgs are dropped. For example, if the task is waiting for msg a
         // but receives msg b, msg b is dropped, otherwise, it stays in the task's MsgList.
         DropUnexpectedMsgsFlag = 1,
@@ -824,15 +878,15 @@ class TaskClass : public NodeClass
     // Flag word that contains various flag bits.
     FlagsClass Flags;
 
-    // The task's stack. Every task needs its own stack.
-    StackClass Stack;
+    // The task's msg list. Msgs sent to this task are placed into the MsgList
+    // according to the msg priority.
+    MsgListClass MsgList;
 
     // See the Schedule() function in Tics.cpp to understand how the task priority is used.
     int Priority;
 
-    // The task's msg list. Msgs sent to this task are placed into the MsgList
-    // according to the msg priority.
-    MsgListClass MsgList;
+    // The task's stack. Every task needs its own stack.
+    StackClass Stack;
 
     // Functions
 
@@ -843,6 +897,9 @@ class TaskClass : public NodeClass
 
     // TaskClass destructor
     ~TaskClass();
+
+    // Returns true if task is a system task.
+    bool IsSystemTask(TaskClass *task) { return Flags.IsSet(SystemTaskFlag); }
 
     // Checks stack size.
     bool StackSizeIsValid(int stackSizeInBytes);
@@ -907,9 +964,6 @@ class TaskClass : public NodeClass
     // Suspends the current task. See the Suspend() function for details.
     void Suspend();
 
-    // Remove all references to the indicated task from the current task's msg list.
-    void DeleteFromMsgList(TaskClass *task);
-
     // Returns true if any of the bits in the mask are true.
     bool GetFlag(int mask)
     {
@@ -945,7 +999,8 @@ class IdleTaskClass : public TaskClass
     // Functions
 
     // Constructor.
-    IdleTaskClass(const char *name = 0, int priority = IdleTaskPriority);
+    IdleTaskClass(const char *name = 0, int priority = IdleTaskPriority,
+                  int flags = SystemTaskFlag);
 
     // Task function.
     void Task();
@@ -954,10 +1009,13 @@ class IdleTaskClass : public TaskClass
 //-----------------------------------------------------------------------------
 // StartupTaskClass
 //
-// The StartupTaskClass instance, (StartupTask), is a dummy task used to
-// represent the currently running task at startup. This is necessary
+// The StartupTaskClass instance, (StartupTask), is a task used to
+// represent the next task to run at startup. This is necessary
 // because when starting the first task after power on, there must be a
-// currently running task, even if it's a dummy task.
+// currently running task and a next task to run. The Startup task becomes
+// the next task to run when it is pulled from the ReadyList. The StartupTask
+// will always be the first task to run because it has a higher priority
+// than any other task, which puts it at the top of the ReadyList.
 //-----------------------------------------------------------------------------
 class StartupTaskClass : public TaskClass
 {
@@ -965,7 +1023,7 @@ class StartupTaskClass : public TaskClass
     // Functions
 
     // Constructor.
-    StartupTaskClass(const char *name = 0, int priority = MediumPriority)
+    StartupTaskClass(const char *name = 0, int priority = StartupTaskPriority)
         : TaskClass(name, priority)
     {
     }
@@ -979,7 +1037,16 @@ class StartupTaskClass : public TaskClass
 //
 // When we switch to the StartupTask on startup, the context switching code
 // requires a currently running task whose context must be saved. The
-// DummyTask serves this purpose.
+// DummyTask serves this purpose. Note that the DummyTask sets the
+// ScheduleTaskOnCreationFlag to 0, which means that the DummyTask is not
+// inserted into the ReadyList on startup. This is necessary because if
+// we schedule it to run on startup, then when it is pulled out of the ReadyList
+// to run, It will need a CurrentTask to perform the task switch to the
+// DummyTask, but on powerup, there is no CurrentTask if we try to
+// switch to the DummyTask. As mentioned above, that is the whole purpose
+// behind the DummyTask - to act as the CurrentTask so that when StartupTask
+// is pulled out of the ReadyList, the DummyTask acts as the CurrentTask so
+// so that the task switching logic can work properly.
 //-----------------------------------------------------------------------------
 class DummyTaskClass : public TaskClass
 {
@@ -987,13 +1054,14 @@ class DummyTaskClass : public TaskClass
     // Functions
 
     // Constructor.
-    DummyTaskClass(const char *name = 0, int priority = MediumPriority, int flags = 0)
+    DummyTaskClass(const char *name = 0, int priority = DummyTaskPriority,
+                   int flags = SystemTaskFlag)
         : TaskClass(name, priority, flags)
     {
     }
 
     // Task function.
-    void Task() {}
+    void Task();
 };
 
 //-----------------------------------------------------------------------------
@@ -1029,7 +1097,8 @@ class TicsSystemTaskClass : public TaskClass
     // Functions
 
     // Constructor
-    TicsSystemTaskClass() : TaskClass(0, MediumPriority, DropUnexpectedMsgsFlag) {};
+    TicsSystemTaskClass()
+        : TaskClass(0, SystemTaskPriority, (DropUnexpectedMsgsFlag | SystemTaskFlag)) {};
 
     // The task.
     void Task();
@@ -1241,6 +1310,7 @@ StackType *GetTaskStackPointer();
 void Schedule(TaskClass *task, bool inIsr = false);
 unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus);
 int RoundUpToSizeofInt(int count);
+
 //-----------------------------------------------------------------------------
 // End TicsNameSpace.
 //-----------------------------------------------------------------------------
