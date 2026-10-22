@@ -340,7 +340,7 @@ void TaskClass::Suspend(void)
     // Check the outgoing task's stack.
     Stack.Check();
 
-    // We are now on the NextTask's stack. So, update the CurrentTask's pointer.
+    // We are now on the NextTask's stack. So, update the CurrentTask.
     CurrentTask = NextTask;
 
     // Check the incoming task's stack.
@@ -1128,7 +1128,7 @@ void CheckForInterrupts()
         // Check to make sure the task exists.
         if (TaskList.TaskExists(task) == false)
         {
-            ErrorHandler.Report(ErrorMsgAttemptToScheduleANonexistentTask);
+            ErrorHandler.Report(ErrorAttemptToScheduleANonexistentTask);
         }
 
         // Schedule the task.
@@ -1712,7 +1712,7 @@ void MsgClass::CheckParameters()
     // Check if the MsgNum is within a valid range.
     if (InRange(MinMsgNum, MaxMsgNum, MsgNum) == false)
     {
-        ErrorHandler.Report(ErrorMsgPriorityIsOutOfRange);
+        ErrorHandler.Report(ErrorMsgNumIsOutOfRange);
     }
 
     // Check for an invalid Delay value.
@@ -1795,7 +1795,7 @@ MsgClass *TaskClass::Send(MsgClass *msg)
         DelayList.AddByDelay(msg);
     }
 
-    // Return the msg that was sent scheduled to run after a delay.
+    // Return the msg that was sent or scheduled to run after a delay.
     return msg;
 }
 
@@ -1839,16 +1839,16 @@ void DummyTaskClass::Task()
 //-----------------------------------------------------------------------------
 /// \brief The StartupTask.
 ///
-/// This task serves as the CurrentTask so that the very first context switch
-// will have a CurrentTask to refer to.
+/// This task serves as the NextTask so that the very first context switch
+// will have a NextTask to refer to.
 //-----------------------------------------------------------------------------
 void StartupTaskClass::Task()
 {
-    // Initialize the target hardware.
-    TargetInit();
-
     while (true)
     {
+        // Initialize target hardware.
+        TargetInit();
+
         // Wait for any msg, then let the garbage collector drop it.
         Wait();
     }
@@ -1902,9 +1902,6 @@ void TicsSystemTaskClass::Task()
         {
             // For now, drop all msgs.
         default:
-            // Remove the unexpected msg from the msg list.
-            MsgList.Remove(msg);
-
             // Mark the msg for deletion.
             DeleteList.Add(msg);
 
@@ -1920,15 +1917,9 @@ void TicsSystemTaskClass::Task()
 /// \param src - Where to copy from.
 /// \param numChars - The number of bytes to copy.
 //-----------------------------------------------------------------------------
-//-----------------------------------------------------------------------------
-/// \brief Copy a block of memory.
-///
-/// \param dst - Where to copy to.
-/// \param src - Where to copy from.
-/// \param numChars - The number of bytes to copy.
-//-----------------------------------------------------------------------------
 void MemCopy(void *dst, void *src, int numChars)
 {
+    // Cast dst and src to char pointers.
     char *d = (char *)(dst);
     char *s = (char *)(src);
 
@@ -1938,6 +1929,7 @@ void MemCopy(void *dst, void *src, int numChars)
         ErrorHandler.Report(ErrorMsgNullPointerInMemCopy);
     }
 
+    // Check for invalid number of chars to be copied.
     if (numChars <= 0)
     {
         ErrorHandler.Report(ErrorMsgInvalidNumCharsInMemCopy);
@@ -1999,13 +1991,6 @@ bool StringCompare(const char *a, const char *b)
             return true;
         }
 
-        // Check for strings of different length.
-        if ((*a == 0 && *b != 0) || (*a != 0 && *b == 0))
-        {
-            // We see the end of one string but not the other, so no match.
-            return false;
-        }
-
         // Increment the string pointers.
         a++;
         b++;
@@ -2025,7 +2010,7 @@ bool StringCompare(const char *a, const char *b)
 //-----------------------------------------------------------------------------
 void MemSet(void *dst, int numChars, char data)
 {
-    int i;
+    // Convert void to char.
     char *d = (char *)dst;
 
     // Check for null pointer.
@@ -2041,7 +2026,7 @@ void MemSet(void *dst, int numChars, char data)
     }
 
     // Fill the destination with the indicated data value.
-    for (i = 0; i < numChars; i++)
+    for (int i = 0; i < numChars; i++)
     {
         // Fill the destination array, byte by byte.
         *d++ = data;
@@ -2051,7 +2036,7 @@ void MemSet(void *dst, int numChars, char data)
 //-----------------------------------------------------------------------------
 /// \brief Fifo class constructor.
 ///
-/// \param slotSizeInBytes - The size of the fifo array item (slot).
+/// \param slotSizeInBytes - The size of the fifo array element (slot).
 /// \param numSlots - The number of slots in the fifo.
 //-----------------------------------------------------------------------------
 FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
@@ -2064,9 +2049,6 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
 
     // Assign slot size.
     SlotSizeInBytes = slotSizeInBytes;
-
-    // Adjust slot size to a multiple of a size that is a multiple of sizeof(int);
-    SlotSizeInBytes = RoundUpToSizeofInt(SlotSizeInBytes);
 
     // Assign the total number of slots in the fifo, including the unused slot.
     NumSlots = numSlots;
@@ -2088,6 +2070,9 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
 
     // Point front and rear pointers to the first item in the fifo.
     Front = Rear = FifoSpace;
+
+    // Initialize the number of items in the fifo.
+    numItemsInFifo = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -2146,6 +2131,9 @@ void FifoClass::Add(void *item)
 
     // Copy the item to the slot.
     MemCopy(Rear, item, SlotSizeInBytes);
+
+    // Update the number of items in the fifo.
+    numItemsInFifo++;
 }
 
 //-----------------------------------------------------------------------------
@@ -2169,6 +2157,9 @@ void *FifoClass::Remove(void *item)
 
     // Copy the contents of the slot that Front points to to the item address.
     MemCopy(item, Front, SlotSizeInBytes);
+
+    // Update the number of items in the fifo.
+    numItemsInFifo--;
 
     // Return the item address, which remains unchanged.
     return item;
@@ -2206,17 +2197,8 @@ bool FifoClass::IsFull()
 //-----------------------------------------------------------------------------
 int FifoClass::NumItems()
 {
-    unsigned int numItems;
-    unsigned int front = (unsigned int)Front;
-    unsigned int rear = (unsigned int)Rear;
-
-    // Compute the modular difference in bytes.
-    numItems = ModularSubtract(front, rear, NumSlots);
-
-    // Compute the modular difference in slots.
-    numItems /= SlotSizeInBytes;
-
-    return numItems;
+    // Return the number of items in the fifo.
+    return numItemsInFifo;
 }
 
 //-----------------------------------------------------------------------------
@@ -2234,11 +2216,9 @@ void FifoClass::Reset()
 /// The default behavior is to loop indefinitely. The user can modify this
 /// as he wishes. However, this function should never return, since most
 /// errors are indicators of a catastrophic system failure, and no further
-/// processing should occur. Note also that there are no explanations of the
-/// error numbers. The source of the error is determined by searching the code
-/// for the unique error number.
+/// processing should occur.
 ///
-/// \param - The error number reported from the caller.
+/// \param errorNum - The error number reported by the caller.
 //-----------------------------------------------------------------------------
 void ErrorHandlerClass::Report(int errorNum)
 {

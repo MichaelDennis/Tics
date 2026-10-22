@@ -116,13 +116,13 @@ HelloTaskClass *HelloTask;
 //-----------------------------------------------------------------------------
 void HelloTaskClass::Task(void)
 {
-    int i = 0;
+    volatile int i = 0;
 
     // The task body is always an infinite loop.
     while (true)
     {
         // Output the string followed by a counter value.
-        // cout << "Hello World! " << i << endl;
+        cout << "Hello World! " << i << endl;
 
         // Sleep for one second.
         Pause(1000);

@@ -133,7 +133,7 @@ HelloTaskClass *HelloTask;
 void HelloTaskClass::Task(void)
 {
     // Counter initialization.
-    int i = 0;
+    volatile int i = 0;
 
     // The task body is always an infinite loop.
     while (true)

@@ -25,15 +25,16 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Define TaskA class
 //-----------------------------------------------------------------------------
-class TaskAClass : public TaskClass {
-public:
+class TaskAClass : public TaskClass
+{
+  public:
     // Data
     int SampleIntervalInMs;
     int PortNum;
 
     // Functions
-    TaskAClass(const char * name = 0, int sampleIntervalInMs = 1000, int portNum = 0) :
-       SampleIntervalInMs(sampleIntervalInMs), PortNum(portNum), TaskClass(name)
+    TaskAClass(const char *name = 0, int sampleIntervalInMs = 1000, int portNum = 0)
+        : SampleIntervalInMs(sampleIntervalInMs), PortNum(portNum), TaskClass(name)
     {
     }
     void Task();
@@ -42,8 +43,8 @@ public:
 //-----------------------------------------------------------------------------
 // Pointers to the task instances that are created in main().
 //-----------------------------------------------------------------------------
-TaskAClass * TaskA0;
-TaskAClass * TaskA1;
+TaskAClass *TaskA0;
+TaskAClass *TaskA1;
 
 //-----------------------------------------------------------------------------
 // Simulate reading a port.
@@ -61,7 +62,8 @@ void TaskAClass::Task()
 {
     int portReading;
 
-    while (true) {
+    while (true)
+    {
         // Read the port value.
         portReading = ReadPort(PortNum);
 
@@ -92,4 +94,3 @@ int main()
 
     return 0;
 }
-

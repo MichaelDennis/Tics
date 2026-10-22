@@ -296,14 +296,19 @@ Default_Handler:
 //
 // Description:
 //   The hardware clock interrupt service routine responding to SysTick 
-//   register overflows. Saves volatile context and bridges to the C++ kernel.
+//   register overflows. Saves volatile context and calls the C function
+//   to update the system tick counter function that is called by Tics to
+//   read the system tick count.
 //-----------------------------------------------------------------------------
 .thumb_func
 SysTick_Handler:
     // Save the Link Register value onto the stack to track our return path.
     push {lr}
 
-    // Call the external C++ function tracking periodic kernel uptime ticks.
+    // Call the C function that updates the 1 ms system tick 
+    // counter named SystemTickCount, which is the value returned
+    // by the C function GetSystemTickCount which is the function
+    // that Tics calls to get the current 1 ms system tick count.
     bl  TimerTickIsr
 
     // Pop the saved address straight into the Program Counter to exit the ISR.

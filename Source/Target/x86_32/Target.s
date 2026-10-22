@@ -1,6 +1,30 @@
+/*
+MIT License
+
+Copyright (c) 2026 Michael Dennis McDonnell
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files(the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions :
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 #-----------------------------------------------------------------------------
 # Copyright (c) 2026, Tics Realtime (Michael Dennis McDonnell)
-# Target: x86 32-bit (IA32) Hosted Cooperative Context Switch
+# Target: x86 32-bit
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -39,18 +63,18 @@
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
-# Task Switch: Cooperative context switch routine.
+# TaskSwitch: Cooperative context switch function.
 #
 # Description:
-#   Saves the current Tics task's registers and restores the incoming 
-#   task's registers.
+#   Saves the current Tics task's registers on the stack and restores the  
+#   incoming task's registers.
 #
 # Arguments:
 #   20(%esp) - currentTaskSavedSp: Pointer to save location for current task SP.
 #   24(%esp) - newTaskSavedSp: SP value of the incoming (new) task.
 #-----------------------------------------------------------------------------
 TaskSwitch:
-    # 1. Save Current Task Context (Callee-saved registers)
+    # 1. Save Current Task registers (Callee-saved registers)
     pushl %ebp            # Save the base pointer register state.
     pushl %ebx            # Save the base register state.
     pushl %esi            # Save the source index register state.
@@ -72,7 +96,7 @@ TaskSwitch:
     ret                   # Return to the newly loaded task execution path.
 
 #-----------------------------------------------------------------------------
-# Get Stack Pointer: Returns current SP.
+# GetStackPointer: Returns current SP.
 #
 # Description:
 #   Return the raw, unadjusted stack pointer (SP) value of the current task. 

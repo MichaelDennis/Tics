@@ -23,39 +23,41 @@ SOFTWARE.
 */
 
 //-----------------------------------------------------------------------------
-// This file provides the low-level ARM32 Cortex-M3 target specific hardware
-// initializations, timer tracking drivers, and required system stub functions
-// for the Tics RTOS engine.
+/// \file Target.cpp
+///
+/// This file provides the low-level ARM32 Cortex-M3 target specific hardware
+/// initializations, timer tracking drivers, and required system stub functions
+/// for the Tics RTOS engine.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Includes
+/// Includes
 //-----------------------------------------------------------------------------
 #include "Tics.hpp"
 #include <stdint.h>
 #include <sys/types.h>
 
 //-----------------------------------------------------------------------------
-// extern "C"
+/// extern "C"
 //-----------------------------------------------------------------------------
 extern "C"
 {
-    // Raw low-level assembly query pulling the active hardware stack register.
+    // This function returns the current value of the stack pointer register.
     uintptr_t GetStackPointer();
 }
 
 //-----------------------------------------------------------------------------
-// Start TicsNameSpace
+/// Start TicsNameSpace
 //-----------------------------------------------------------------------------
 namespace TicsNameSpace
 {
 
 //-----------------------------------------------------------------------------
-// Enums
+/// Enums
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Core register constants and hardware clock metrics for the SysTick module.
+/// Core register constants and hardware clock metrics for the SysTick module.
 //-----------------------------------------------------------------------------
 enum SysTickPeripheralEnum : uint32_t
 {
@@ -82,11 +84,11 @@ enum SysTickPeripheralEnum : uint32_t
 };
 
 //-----------------------------------------------------------------------------
-// Structs
+/// Structs
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Hardware layout mapping block for the Cortex-M3 SysTick core peripheral registers.
+/// Hardware layout mapping block for the Cortex-M3 SysTick core peripheral registers.
 //-----------------------------------------------------------------------------
 struct SysTickMemMap
 {
@@ -104,110 +106,120 @@ struct SysTickMemMap
 };
 
 //-----------------------------------------------------------------------------
-// Globals
+/// Globals
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Statics
+/// Statics
 //-----------------------------------------------------------------------------
 
-// Global rolling counter tracking total clock ticks since processor power-on.
+/// Global rolling counter tracking total clock ticks since processor power-on.
 static volatile TimerTickType SystemTickCount = 0;
 
-// Memory pointer targeted directly onto physical peripheral baseline registers.
+/// Memory pointer targeted directly onto physical peripheral baseline registers.
 static SysTickMemMap *const SysTickPeripheral = (SysTickMemMap *)SysTickBaseAddr;
 
 //-----------------------------------------------------------------------------
-// Functions
+/// Functions
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-/// \brief Configures and enables the hardware internal SysTick exception
-/// framework.
+/// \brief Arm timer isr setup.
+///
+/// The Tics required 1 ms timer tick is realized on the Arm
+/// by setting up the Arm countdown timer to count to 0 and reset
+/// every 1 ms. The setup required to do this is given below.
 //-----------------------------------------------------------------------------
 void TargetSysTickInit()
 {
-    // Disable SysTick during setup.
+    /// Disable SysTick during setup.
     SysTickPeripheral->ControlStatus = 0;
 
-    // Set reload for 1ms intervals.
+    /// Set reload for 1ms intervals.
     SysTickPeripheral->ReloadValue = SysTickReload1Ms;
 
-    // Clear current counter value.
+    /// Clear current counter value.
     SysTickPeripheral->CurrentValue = 0;
 
-    // Enable counter, interrupt, and processor clock source.
+    /// Enable counter, interrupt, and processor clock source.
     SysTickPeripheral->ControlStatus = (SysTickEnable | SysTickTickInt | SysTickClkSource);
 }
 
 //-----------------------------------------------------------------------------
-// Centralized hardware initialization entry target execution point.
+/// \brief This function provides a Tics compliant target init function.
+///
+/// Tics requires that a function as named below be provided so that
+/// Tics can call it at startup time to initialize the hardware system.
 //-----------------------------------------------------------------------------
 void TargetInit() { TargetSysTickInit(); }
 
 //-----------------------------------------------------------------------------
-// Read-interface query layer pulling the safe static runtime clock value.
+/// \brief This function provides a Tics compliant function to return
+/// the system 1 ms tick count.
 //-----------------------------------------------------------------------------
 TimerTickType GetSystemTickCount(void) { return SystemTickCount; }
 
 //-----------------------------------------------------------------------------
-// This target-specific wrapper handles the calling-convention compensation
-// math and returns the clean stack pointer (SP) value of the current task.
+/// \brief This function returns the value of the stack pointer register.
 //-----------------------------------------------------------------------------
 StackType *GetTaskStackPointer()
 {
-    // Query the raw, unadjusted hardware stack pointer value from assembly.
+    /// Query the raw, unadjusted hardware stack pointer value from assembly.
     uintptr_t rawSp = GetStackPointer();
 
-    // Return the raw address directly as no stack compensation is needed on ARM32.
+    /// Return the raw address directly as no stack compensation is needed on ARM32.
     return (StackType *)rawSp;
 }
 
 //-----------------------------------------------------------------------------
-// Classes
+/// \brief the following are class functions required by Tics.
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-// Sets up initial execution frames on the target process stack layout.
+/// \brief This function primes the stack.
+///
+/// The first time a task is run it requires that the stack be
+/// pre-populated so that the context switching code can pop the
+/// register values off the stack. The contents of the registers on
+/// startup is immaterial - an values can be used.
 //-----------------------------------------------------------------------------
 void StackClass::PrimeStack()
 {
-    // Local stack tracing tracking pointer.
+    /// Local stack tracing tracking pointer.
     StackType *sp = (StackType *)((uintptr_t)StackTop & ~7U);
 
     *(--sp) = (StackType)&TrampolineToNewTask;
-
     *(--sp) = 11;
-
     *(--sp) = 10;
-
     *(--sp) = 9;
-
     *(--sp) = 8;
-
     *(--sp) = 7;
-
     *(--sp) = 6;
-
     *(--sp) = 5;
-
     *(--sp) = 4;
-
     SavedSp = (StackType *)sp;
 }
 
 //-----------------------------------------------------------------------------
-// extern "C"
+/// extern "C"
 //-----------------------------------------------------------------------------
 extern "C"
 {
     //-----------------------------------------------------------------------------
-    // Periodic clock hardware interrupt execution trap called directly by Target.s.
+    ///\brief This function updates the 1 ms system tick counter variable.
+    ///
+    /// SystemTickCount is a static variable that contains the current 1 ms
+    /// tick count value, and is returned by the function GetSystemTickCount
+    /// which is called to Tics.
     //-----------------------------------------------------------------------------
     void TimerTickIsr(void) { SystemTickCount++; }
 
     //-----------------------------------------------------------------------------
-    // Mandatory POSIX low-level system compliance stubs satisfying Newlib linkages.
+    ///\brief  Mandatory POSIX low-level system compliance stubs
+    ///
+    /// Even though we are not using the functions listed below, we need to
+    /// define dummy versions to satisfy the linker, otherwise we will get
+    /// unresolved references when we try to link.
     //-----------------------------------------------------------------------------
     int _kill(int pid, int sig)
     {
@@ -254,6 +266,6 @@ extern "C"
         return -1;
     }
 
-} // extern "C"
+} /// extern "C"
 
 } // namespace TicsNameSpace

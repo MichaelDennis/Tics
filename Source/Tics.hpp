@@ -343,7 +343,7 @@ enum ErrorMsgEnum
     ErrorBadTimerTickCount = 1068,
     ErrorAttemptToDestroyAnUnlinkedNode = 1069,
     ErrorMsgMaxNumberOfListNodesExceeded = 1070,
-    ErrorMsgAttemptToScheduleANonexistentTask = 1071,
+    ErrorAttemptToScheduleANonexistentTask = 1071,
     ErrorMsgIsrDidNotAddDataToFifo = 1072,
     ErrorMsgNullPointerInMemCopy = 1073,
     ErrorMsgInvalidNumCharsInMemCopy = 1074,
@@ -371,6 +371,7 @@ enum ErrorMsgEnum
     ErrorNullReceiverPointer = 1096,
     ErrorMsgDelayIsOutOfRange = 1097,
     ErrorListNodeCountMismatch = 1098,
+    ErrorMsgNumIsOutOfRange = 1099,
 };
 
 //-----------------------------------------------------------------------------
@@ -709,10 +710,10 @@ class StackClass : public TicsBaseClass
     enum StackClassEnum
     {
         // Default stack size.
-        DefaultStackSizeInBytes = (1024 * 2),
+        DefaultStackSizeInBytes = (1024 * 3),
 
         // The pad is a warning area at the end of stack memory.
-        DefaultStackPadSizeInBytes = 128,
+        DefaultStackPadSizeInBytes = 1024,
 
         // The stack must be at least this large.
         MinStackSizeInBytes = (1024 * 2),
@@ -800,6 +801,9 @@ class FifoClass : public TicsBaseClass
     // The size of a fifo slot.
     int SlotSizeInBytes;
 
+    // The number of items in the fifo.
+    int numItemsInFifo;
+
     // The total number of slots in the fifo.
     int NumSlots;
 
@@ -839,8 +843,6 @@ class FifoClass : public TicsBaseClass
 
     // Resets the front and rear pointers.
     void Reset();
-
-    // Remove references to a
 };
 
 //-----------------------------------------------------------------------------
@@ -1041,7 +1043,7 @@ class StartupTaskClass : public TaskClass
 // ScheduleTaskOnCreationFlag to 0, which means that the DummyTask is not
 // inserted into the ReadyList on startup. This is necessary because if
 // we schedule it to run on startup, then when it is pulled out of the ReadyList
-// to run, It will need a CurrentTask to perform the task switch to the
+// to run, it will need a CurrentTask to perform the task switch to the
 // DummyTask, but on powerup, there is no CurrentTask if we try to
 // switch to the DummyTask. As mentioned above, that is the whole purpose
 // behind the DummyTask - to act as the CurrentTask so that when StartupTask
