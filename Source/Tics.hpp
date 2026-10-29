@@ -136,7 +136,7 @@ enum TicsNamespaceEnum
     SixteenByteBoundaryMask = ~0xf,
 
     //---------------------------------------------------------------------------
-    // Tics system flags.
+    // Tics system flags. Thee flags apply to all tasks.
     //---------------------------------------------------------------------------
 
     // When set, this flag performs extra checking. Unused. Tics performs extra checking already.
@@ -372,6 +372,7 @@ enum ErrorMsgEnum
     ErrorMsgDelayIsOutOfRange = 1097,
     ErrorListNodeCountMismatch = 1098,
     ErrorMsgNumIsOutOfRange = 1099,
+    ErrorInvalidFifoSlotSize = 1100,
 };
 
 //-----------------------------------------------------------------------------
@@ -783,7 +784,14 @@ class FifoClass : public TicsBaseClass
     enum FifoClassEnum
     {
         // The default number of items in the fifo.
-        DefaultNumFifoItems = 16
+        DefaultNumFifoItems = 16,
+
+        // The maximum number of fifo slots allowed.
+        MaxNumFifoSlots = 128,
+
+        // Maximum allowed fifo slot size.
+        MaxFifoSlotSizeInBytes = 4096,
+
     };
 
     // Pointer to the oldest item in the fifo. Items are removed from the front.
@@ -800,9 +808,6 @@ class FifoClass : public TicsBaseClass
 
     // The size of a fifo slot.
     int SlotSizeInBytes;
-
-    // The number of items in the fifo.
-    int numItemsInFifo;
 
     // The total number of slots in the fifo.
     int NumSlots;
@@ -1082,6 +1087,7 @@ class ErrorHandlerClass : public TicsBaseClass
     };
 
     FlagsClass Flags;
+    volatile int SavedErrorNum;
 
     // Functions
 
@@ -1300,7 +1306,6 @@ extern ErrorHandlerClass ErrorHandler;
 TimerTickType ReadTickCount();
 void CheckForSystemEvents();
 void CheckForInterrupts();
-void Schedule(TaskClass *task, bool inIsr);
 void MemSet(void *dst, int numChars, char data);
 void MemCopy(void *dst, void *src, int numChars);
 void Suspend();
@@ -1310,7 +1315,7 @@ void Send(TaskClass *task, FifoClass *fifo, void *data);
 void TargetInit();
 StackType *GetTaskStackPointer();
 void Schedule(TaskClass *task, bool inIsr = false);
-unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus);
+int ModularSubtract(uintptr_t a, uintptr_t b, uintptr_t modulus);
 int RoundUpToSizeofInt(int count);
 
 //-----------------------------------------------------------------------------

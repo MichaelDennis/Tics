@@ -85,7 +85,7 @@ void TaskAClass::Task()
         cout << "TaskB was deleted by TaskA.\n\n";
 
         // Now wait a second.
-        Pause(50);
+        Pause(1000);
     }
 }
 

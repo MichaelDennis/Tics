@@ -102,7 +102,9 @@ void TargetInit() {}
 ///
 /// Tics requires a 1 ms tick count to manage timers. This function provides
 /// a running tick count that wraps back to zero after the maximum value
-/// is reached.
+/// is reached. Since we are running Linux, we just grab the time from the Linux
+/// time function. In a real x86_32 embedded system this function would have
+/// to be replaced.
 ///
 /// \return The current 1 ms timer tick count value.
 //-----------------------------------------------------------------------------

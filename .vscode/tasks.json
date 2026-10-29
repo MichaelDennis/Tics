@@ -2,6 +2,29 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Build Tics x86_32 (Native)",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-m32",
+                "-std=c++11",
+                "-I${workspaceFolder}/Source",
+                "-I/usr/include",
+                "-ggdb3",
+                "-O0",
+                "${file}",
+                "${workspaceFolder}/Source/Tics.cpp",
+                "${workspaceFolder}/Source/Target/x86_32/Target.cpp",
+                "${workspaceFolder}/Source/Target/x86_32/Target.s",
+                "-o",
+                "${workspaceFolder}/Bin/Main"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
             "label": "Build Tics RISC-V32 (Virt)",
             "type": "shell",
             "command": "riscv64-unknown-elf-g++",
@@ -69,29 +92,6 @@
                 "clear": false
             },
             "problemMatcher": "$gcc"
-        },
-        {
-            "label": "Build Tics x86_32 (Native)",
-            "type": "shell",
-            "command": "g++",
-            "args": [
-                "-m32",
-                "-std=c++11",
-                "-I${workspaceFolder}/Source",
-                "-I/usr/include",
-                "-ggdb3",
-                "-O0",
-                "${file}",
-                "${workspaceFolder}/Source/Tics.cpp",
-                "${workspaceFolder}/Source/Target/x86_32/Target.cpp",
-                "${workspaceFolder}/Source/Target/x86_32/Target.s",
-                "-o",
-                "${workspaceFolder}/Bin/TicsLinuxTest"
-            ],
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
         }
     ]
 }

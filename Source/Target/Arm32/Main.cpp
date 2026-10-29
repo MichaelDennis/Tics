@@ -138,10 +138,8 @@ void HelloTaskClass::Task(void)
     // The task body is always an infinite loop.
     while (true)
     {
+        // For debugging, add a logpoint here.
         i++;
-
-        // Output the string "Hello World!World.cpp" followed by a counter value.
-        // MDM cout << "Hello World! " << i++ << endl;
 
         // Sleep for one second.
         Pause(1000);

@@ -218,15 +218,26 @@ void StackClass::Check(void)
     // Read the current CPU stack pointer.
     currentSp = (StackType *)GetTaskStackPointer();
 
-    // Check if the stack pointer is within an allowable range.
-    if (currentSp < StackBottom)
+    // Convert to an integer.
+    uintptr_t currentSpValue = (uintptr_t)currentSp;
+
+    // Convert to an integer.
+    uintptr_t StackBottomValue = (uintptr_t)StackBottom;
+
+    // Convert to an integer.
+    uintptr_t StackTopValue = (uintptr_t)StackTop;
+
+    // Check if the stack pointer is out of allowable range.
+    if (currentSpValue < StackBottomValue)
     {
         ErrorHandler.Report(ErrorCurrentSpIsBelowStackBottom);
     }
+
     // Note: Initially the Sp is set to StackTop + 1, which is a valid value
     // because the first valid stack operation will be a push, which means the
     // the first value written to the stack will be written to StackTop.
-    else if (currentSp > (StackTop + 1))
+
+    else if (currentSpValue > (StackTopValue + 1))
     {
         ErrorHandler.Report(ErrorCurrentSpIsAboveStackTop);
     }
@@ -1923,6 +1934,10 @@ void MemCopy(void *dst, void *src, int numChars)
     char *d = (char *)(dst);
     char *s = (char *)(src);
 
+    // Convert the pointers to unsigned integers for compare checks.
+    uintptr_t dValue = (uintptr_t)d;
+    uintptr_t sValue = (uintptr_t)s;
+
     // Check for null pointers.
     if (dst == 0 || src == 0)
     {
@@ -1937,11 +1952,9 @@ void MemCopy(void *dst, void *src, int numChars)
 
     // Check for overlap.
     // The copy is only safe if:
-    //   dst > src + numChars   OR   src > dst + numChars
-    // Otherwise regions overlap. We purposely use ">" instead of ">=" in case
-    // the user wants to copy only the chars of a null terminated string, otherwise,
-    // the terminating null of src will be overwritten, thus corrupting the src buffer.
-    if (!(d > s + numChars || s > d + numChars))
+    // dst >= src + numChars   OR   src >= dst + numChars
+    // We use integer values to avoid being optimized away.
+    if (!(dValue >= sValue + numChars || sValue >= dValue + numChars))
     {
         ErrorHandler.Report(ErrorMsgOverlapInMemCopy);
     }
@@ -2010,7 +2023,7 @@ bool StringCompare(const char *a, const char *b)
 //-----------------------------------------------------------------------------
 void MemSet(void *dst, int numChars, char data)
 {
-    // Convert void to char.
+    // Convert void * to char *.
     char *d = (char *)dst;
 
     // Check for null pointer.
@@ -2020,7 +2033,7 @@ void MemSet(void *dst, int numChars, char data)
     }
 
     // Check for invalid numChars.
-    if (numChars > MaxNumMemSetChars)
+    if (numChars <= 0 || numChars > MaxNumMemSetChars)
     {
         ErrorHandler.Report(ErrorMsgInvalidNumCharsInMemSet);
     }
@@ -2042,9 +2055,15 @@ void MemSet(void *dst, int numChars, char data)
 FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
 {
     // We must have at least 2 slots. One is wasted, the other holds data.
-    if (numSlots < 2)
+    if (numSlots < 2 || numSlots > MaxNumFifoSlots)
     {
         ErrorHandler.Report(ErrorMustHaveAtLeastTwoFifoSlots);
+    }
+
+    // Check for invalid slot size.
+    if (slotSizeInBytes <= 0 || slotSizeInBytes > MaxFifoSlotSizeInBytes)
+    {
+        ErrorHandler.Report(ErrorInvalidFifoSlotSize);
     }
 
     // Assign slot size.
@@ -2070,9 +2089,6 @@ FifoClass::FifoClass(int slotSizeInBytes, int numSlots)
 
     // Point front and rear pointers to the first item in the fifo.
     Front = Rear = FifoSpace;
-
-    // Initialize the number of items in the fifo.
-    numItemsInFifo = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -2101,14 +2117,22 @@ void *FifoClass::Bump(void *item)
 {
     char *nextItemPtr;
 
+    // Point to the next item.
     nextItemPtr = (char *)item + SlotSizeInBytes;
 
-    if (nextItemPtr > LastFifoByte)
+    // Convert these pointers to integers to avoid being optimized away.
+    uintptr_t nextItemPtrValue = (uintptr_t)nextItemPtr;
+    uintptr_t LastFifoByteValue = (uintptr_t)LastFifoByte;
+
+    // Check if the next item is beyond the last byte of the fifo.
+    if (nextItemPtrValue > LastFifoByteValue)
     {
+        // If so, then wrap around.
         return FifoSpace;
     }
     else
     {
+        // Otherwise, move to the next item.
         return nextItemPtr;
     }
 }
@@ -2131,9 +2155,6 @@ void FifoClass::Add(void *item)
 
     // Copy the item to the slot.
     MemCopy(Rear, item, SlotSizeInBytes);
-
-    // Update the number of items in the fifo.
-    numItemsInFifo++;
 }
 
 //-----------------------------------------------------------------------------
@@ -2157,9 +2178,6 @@ void *FifoClass::Remove(void *item)
 
     // Copy the contents of the slot that Front points to to the item address.
     MemCopy(item, Front, SlotSizeInBytes);
-
-    // Update the number of items in the fifo.
-    numItemsInFifo--;
 
     // Return the item address, which remains unchanged.
     return item;
@@ -2193,12 +2211,20 @@ bool FifoClass::IsFull()
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Returns the number of items in the fifo.
+/// \brief Returns the number of items (occupied slots) in the fifo.
 //-----------------------------------------------------------------------------
 int FifoClass::NumItems()
 {
-    // Return the number of items in the fifo.
-    return numItemsInFifo;
+    int numItems;
+
+    // Convert these pointers to integers to avoid being optimized away.
+    uintptr_t FrontValue = (uintptr_t)Front;
+    uintptr_t RearValue = (uintptr_t)Rear;
+
+    // Compute the modular difference.
+    numItems = ModularSubtract(FrontValue, RearValue, NumSlots);
+
+    return numItems;
 }
 
 //-----------------------------------------------------------------------------
@@ -2224,6 +2250,9 @@ void ErrorHandlerClass::Report(int errorNum)
 {
     volatile int count = 0;
 
+    // Protect errorNum from optimization.
+    SavedErrorNum = errorNum;
+
     while (true)
     {
         // For use while in the debugger.Set count to 1 to break.
@@ -2236,6 +2265,11 @@ void ErrorHandlerClass::Report(int errorNum)
 
 //-----------------------------------------------------------------------------
 /// \brief Add a memory node to a list.
+///
+/// Initially, blocks of memory are carved out of a single memory array as needed.
+/// After the block is deleted it is recycled by adding it to the MemNodeList.
+/// This function adds a deleted block (MemNodeClass instance) back into the
+/// list.
 ///
 /// \param node - The memory node to add.
 //-----------------------------------------------------------------------------
@@ -2329,15 +2363,8 @@ int MemMgrClass::NumBytesToAllocate(int numBytesRequested)
     int numBytesToAllocate;
     int allocationWordSizeInBytes;
 
-    // Use the larger of StackType or int as memory boundary granularity.
-    if (sizeof(StackType) > sizeof(int))
-    {
-        allocationWordSizeInBytes = (int)sizeof(StackType);
-    }
-    else
-    {
-        allocationWordSizeInBytes = sizeof(int);
-    }
+    // Compute the word size in bytes.
+    allocationWordSizeInBytes = sizeof(int);
 
     // We'll use this in the next few operations.
     mask = (unsigned int)(allocationWordSizeInBytes - 1);
@@ -2354,6 +2381,14 @@ int MemMgrClass::NumBytesToAllocate(int numBytesRequested)
 
 //-----------------------------------------------------------------------------
 /// \brief Allocate a memory block.
+///
+/// We first try to find a matching block size in the block list. If we don't
+/// find a match, then we try to carve out a block from the memory array. If
+/// there is no room left in the memory array, then an error is generated.
+///
+/// Note: This flag is experimental and may be removed:
+/// DynamicMemoryAllocationNotAllowedFlag. The idea here is that when the system
+/// quiesces, we will only recycle blocks and disallow carving out new blocks.
 ///
 /// \param numBytesRequested - The number of bytes requested.
 ///
@@ -2385,9 +2420,7 @@ void *MemMgrClass::Allocate(int numBytesRequested)
         ErrorHandler.Report(ErrorCouldNotAllocateMemory);
     }
 
-    // No memory was found, so return 0. (To satisfy the compiler,
-    // since this statement will never be reached (we don't
-    // return from the error handler).)
+    // This statement will never be reached.
     return 0;
 }
 
@@ -2400,17 +2433,16 @@ void *MemMgrClass::Allocate(int numBytesRequested)
 //-----------------------------------------------------------------------------
 MemNodeClass *MemMgrClass::AllocateFromList(int numBytesRequested)
 {
-    // If the list is not empty, return the node at the front of the list,
-    // otherwise, if the list is empty, 0 is returned.
+    // Return a pointer to a block of the desired size or zero if not found.
     return NodeList.Remove(numBytesRequested);
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Create a new memory block and add it to the memory block list.
+/// \brief Carve out a new memory block from the memory array.
 ///
 /// \param numBytesRequested - The block size of the requested memory block.
 ///
-/// \return A pointer to the memory node if found, otherwise, 0.
+/// \return A pointer to the memory node if memory is available, otherwise, 0.
 //-----------------------------------------------------------------------------
 MemNodeClass *MemMgrClass::AllocateFromMemory(int numBytesRequested)
 {
@@ -2418,7 +2450,8 @@ MemNodeClass *MemMgrClass::AllocateFromMemory(int numBytesRequested)
     int numBytesToAllocate;
     MemNodeClass *node;
 
-    // Add sizeof(NodeHeaderClass) because we need space for the header.
+    // Adjust the requested byte count. NumBytesToAllocate() will add the size
+    // of the header and round up to the nearest word.
     numBytesToAllocate = NumBytesToAllocate(numBytesRequested);
 
     // numBytesToAllocate must be in multiples of words.
@@ -2427,7 +2460,7 @@ MemNodeClass *MemMgrClass::AllocateFromMemory(int numBytesRequested)
         ErrorHandler.Report(ErrorByteAllocationRequestMustBeInMultiplesOfWords);
     }
 
-    // Compute the number of bytes available in the memory block.
+    // Compute the number of bytes available in the memory array.
     NumBytesAvailable = MemorySizeInBytes - CurrentOffset;
 
     // If this allocation will go past the end of the memory block, then return 0.
@@ -2469,12 +2502,18 @@ void MemMgrClass::DeAllocate(void *p)
         return;
     }
 
+    // Convert pointers to integers.
+    uintptr_t pValue = uintptr_t(p);
+    uintptr_t MemoryStartValue = uintptr_t(MemoryStart);
+    uintptr_t MemoryEndValue = uintptr_t(MemoryEnd);
+
     // Check if p is outside the allocation memory pool.
-    if (p < MemoryStart || p > MemoryEnd)
+    if (pValue < MemoryStartValue || pValue > MemoryEndValue)
     {
         ErrorHandler.Report(ErrorAttemptToDeleteANonExistentNode);
         return;
     }
+
     // Point to the top of the node.
     MemNodeClass *node = (MemNodeClass *)((char *)p - sizeof(NodeHeaderClass));
 
@@ -2600,8 +2639,8 @@ void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
         ErrorHandler.Report(ErrorDestinationMsgCannotBeTheTail);
     }
 
-    // Make sure that the msg a is in this list by comparing msg a's list id to this->Id.
-    if (a->ListIdIsValid(Id) == false)
+    // Make sure that the msg b is in this list by comparing msg b's list id to this->Id.
+    if (b->ListIdIsValid(Id) == false)
     {
         ErrorHandler.Report(ErrorListIdIsInvalid);
     }
@@ -2635,6 +2674,9 @@ bool DelayIsCorrect(TimerTickType delay)
 //-----------------------------------------------------------------------------
 /// \brief Allocate space for a TicsBaseClass object.
 ///
+/// Since virtually all Tics classes inherit from TicsBaseClass, this allows
+/// for those classes to override the new operator.
+///
 /// \param size - The number of bytes to allocate.
 ///
 /// \return A pointer to the allocated memory.
@@ -2649,6 +2691,9 @@ void *TicsBaseClass::operator new(size_t size)
 
 //-----------------------------------------------------------------------------
 /// \brief Free up space for a TicsBaseClass object.
+///
+/// Since virtually all Tics classes inherit from TicsBaseClass, this allows
+/// for those classes to override the delete operator.
 ///
 /// \param p - A pointer to the allocated space.
 //-----------------------------------------------------------------------------
@@ -2684,6 +2729,10 @@ TicsBaseClass::~TicsBaseClass()
 ///
 /// \param numBytesRequested Number of bytes requested by the user.
 /// \param memMgrPool        Pointer to the memory‑manager pool.
+///
+/// Note: The memMgrPool arg and the memMgrPool member variable in
+/// NodeHeaderClass are artifacts from a time when we were considering
+/// allowing for multiple memory pools. They should be removed. MDM
 //-----------------------------------------------------------------------------
 void NodeHeaderClass::Initialize(int numBytesRequested, MemMgrClass *memMgrPool)
 {
@@ -2699,6 +2748,7 @@ void NodeHeaderClass::Initialize(int numBytesRequested, MemMgrClass *memMgrPool)
 /// \param memMgrPool The memory‑manager pointer to compare.
 ///
 /// \return true if the pointers match; otherwise false.
+/// MDM - Remove this function. we only have one memory pool.
 //-----------------------------------------------------------------------------
 bool NodeHeaderClass::MemMgrMatches(MemMgrClass *memMgrPool)
 {
@@ -2786,7 +2836,7 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 /// A task is started by pushing its start address onto its stack, and popping
 /// it off the stack when it is its turn to run. However, since each stack slot
 /// can hold only one word, an address like MyTask->Task() will not fit, since
-/// it is 2 words in size in C++ To solve this problem, we prime the task's
+/// it is 2 words in size in C++. To solve this problem, we prime the task's
 /// stack with a C function instead (referred to as the "trampoline" function)
 /// which is only one word in size, and call the C++ member function from within
 /// the trampoline function.
@@ -2817,9 +2867,9 @@ void TrampolineToNewTask()
 /// \return Returns the modular difference a - b.
 //-----------------------------------------------------------------------------
 
-unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulus)
+int ModularSubtract(uintptr_t a, uintptr_t b, uintptr_t modulus)
 {
-    unsigned int modularDiff;
+    uintptr_t modularDiff;
 
     // Use conventional subtraction if a > b.
     if (a >= b)
@@ -2834,7 +2884,7 @@ unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulu
     }
 
     // Return the modular difference.
-    return modularDiff;
+    return (int)modularDiff;
 }
 
 //-----------------------------------------------------------------------------
@@ -2847,13 +2897,13 @@ unsigned int ModularSubtract(unsigned int a, unsigned int b, unsigned int modulu
 /// \return Returns the adjusted byte count.
 //-----------------------------------------------------------------------------
 
-int RoundUpToSizeofInt(int numBytes)
+unsigned int RoundUpToSizeofInt(unsigned int numBytes)
 {
-    int adjustedByteCount;
-    int mask;
+    unsigned int adjustedByteCount;
+    unsigned int mask;
 
     // Get the mask, which is also used move to the next highest multiple of sizeof(int).
-    mask = sizeof(int) - 1;
+    mask = sizeof(unsigned int) - 1;
 
     // Adjust the data size to be a multiple of Sizeof(int).
     adjustedByteCount = (numBytes + mask) & ~(mask);
