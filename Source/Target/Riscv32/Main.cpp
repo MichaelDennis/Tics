@@ -122,8 +122,8 @@ void HelloTaskClass::Task(void)
 
     while (true)
     {
-        // Output the string "Hello World!" followed by a counter value.
-        cout << "Hello World! " << i++ << endl;
+        // Bump the counter.
+        i++;
 
         // Sleep for one second.
         Pause(1000);

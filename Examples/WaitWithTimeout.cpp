@@ -21,67 +21,76 @@ using namespace std;
 //-----------------------------------------------------------------------------
 // Define TaskA class
 //-----------------------------------------------------------------------------
-class TaskAClass : public TaskClass {
-public:
+class TaskAClass : public TaskClass
+{
+  public:
+    // Data
+    enum
+    {
+        TimeoutValue = 5000
+    };
+
     // Functions
     void Task();
 
     // Constructor
-    TaskAClass(const char* name = 0) : TaskClass(name) 
-    {
-    }
+    TaskAClass(const char *name = 0) : TaskClass(name) {}
 };
 
 //-----------------------------------------------------------------------------
 // Define TaskB class
 //-----------------------------------------------------------------------------
-class TaskBClass : public TaskClass {
-public:
+class TaskBClass : public TaskClass
+{
+  public:
     // Data
-    enum { LenSleepTimes = 4 };
+    enum
+    {
+        LenSleepTimes = 4
+    };
     // Functions
     void Task();
     // Constructor
-    TaskBClass(const char* name = 0) : TaskClass(name) 
-    {
-    }
+    TaskBClass(const char *name = 0) : TaskClass(name) {}
 };
 
 //-----------------------------------------------------------------------------
 // These will point to instances of TaskA and TaskB.
 //-----------------------------------------------------------------------------
-TaskAClass * TaskA;
-TaskBClass * TaskB;
+TaskAClass *TaskA;
+TaskBClass *TaskB;
 
 //-----------------------------------------------------------------------------
 // Implement TaskA.
 //-----------------------------------------------------------------------------
 void TaskAClass::Task()
 {
-    MsgClass * msg;
+    MsgClass *msg;
     int helloMsgId;
     int timeoutMsgId;
     int counter = 0;
 
-    while (true) {
-        // Send TaskB a msg and save the msg id, which is not the msg number. The msg number is HelloMsg.
+    while (true)
+    {
+        // Send TaskB a msg and save the msg id, which is not the msg number. The msg number is
+        // HelloMsg.
         helloMsgId = Send(TaskB, HelloMsg)->Id;
 
-        // Send ourselves (this) a delayed msg, and save the msg id. 
-        timeoutMsgId = Send(this, TimeoutMsg)->Id;
+        // Send ourselves (this) a delayed msg, and save the msg id.
+        timeoutMsgId = Send(this, TimeoutMsg, 0, TimeoutValue)->Id;
 
         // Now wait for any msg, regardless of its msg number.
         msg = Wait();
 
-        switch (msg->MsgNum) {
-
-            case HelloMsg:
+        switch (msg->MsgNum)
+        {
+        case HelloMsg:
             // Okay, we received a response back from TaskB, so cancel the timeout msg.
             Cancel(msg, timeoutMsgId);
             cout << "HelloMsg- received from TaskB. Canceled timeout msg." << endl;
             break;
 
-            case TimeoutMsg:
+        case TimeoutMsg:
             // Okay, we timed out, so cancel the hello msg.
             Cancel(msg, helloMsgId);
             cout << "*** Timeout msg received in TaskA. Canceled hello msg." << endl;
@@ -95,7 +104,7 @@ void TaskAClass::Task()
         cout << "TaskA MsgList numNodes = " << MsgList.NumNodesInList << endl;
         cout << "TaskB MsgList numNodes = " << TaskB->MsgList.NumNodesInList << endl;
 
-         // Wait a bit so that we don't overflow the msg list.
+        // Wait a bit so that we don't overflow the msg list.
         Pause(1000);
     }
 }
@@ -105,15 +114,16 @@ void TaskAClass::Task()
 //-----------------------------------------------------------------------------
 void TaskBClass::Task()
 {
-    MsgClass * msg;
+    MsgClass *msg;
 
-    for (int i = 0; ; i++) {
-
+    for (int i = 0;; i++)
+    {
         // Wait for a msg named HelloMsg (from TaskA).
         msg = Wait(HelloMsg);
 
         // Do not reply on every nth msg, just for variety.
-        if (i % 10 == 0) {
+        if (i % 10 == 0)
+        {
             Pause(2000);
             continue;
         }
@@ -122,7 +132,8 @@ void TaskBClass::Task()
         Reply(msg, HelloMsg);
 
         // If the msg queue is filling up, flush it.
-        if (MsgList.NumNodesInList > 10) {
+        if (MsgList.NumNodesInList > 10)
+        {
             // Clear the msg list.
             MsgList.Flush();
             cout << "TaskB MsgList Flushed!" << endl;
@@ -144,4 +155,3 @@ int main()
 
     return 0;
 }
-

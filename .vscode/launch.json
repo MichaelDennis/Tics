@@ -13,14 +13,14 @@
             "preLaunchTask": "Build Tics x86_32 (Native)",
             "setupCommands": [
                 {
-                    "description": "Enable pretty-printing for gdb",
+                    "description": "Enable pretty-printing",
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
             ]
         },
         {
-            "name": "Debug Tics RISC-V32 (Virt)",
+            "name": "Debug Tics RISC-V32 (Virt - QEMU)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/Main.elf",
@@ -29,10 +29,10 @@
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
-            "preLaunchTask": "Build Tics RISC-V32 (Virt)"
+            "preLaunchTask": "start-qemu-riscv32"
         },
         {
-            "name": "Debug Tics ARM32 (MPS2-AN385)",
+            "name": "Debug Tics ARM32 (MPS2-AN385 QEMU)",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Bin/Main.elf",
@@ -41,14 +41,82 @@
             "miDebuggerServerAddress": "127.0.0.1:1234",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": true,
-            "preLaunchTask": "Build Tics ARM32 (MPS2-AN385)",
+            "preLaunchTask": "start-qemu-arm32",
             "setupCommands": [
                 {
                     "text": "set architecture arm",
                     "ignoreFailures": false
                 },
                 {
-                    "description": "Enable pretty-printing for gdb",
+                    "description": "Enable pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug Tics ARM32 Nucleo-F401RE (Real - Built-in ST-Link, No Box)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Bin/Main.elf",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb-multiarch",
+            "miDebuggerServerAddress": "localhost:4242",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true,
+            "preLaunchTask": "start-stlink-gdbserver-f401re",
+            "setupCommands": [
+                {
+                    "description": "Connect to ST-Link GDB server",
+                    "text": "-target-select remote localhost:4242",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Set architecture arm",
+                    "text": "set architecture arm",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Reset and halt",
+                    "text": "-interpreter-exec console \"monitor reset halt\"",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Debug Tics RISC-V32 ESP32-C3 (Real - Built-in USB JTAG, No Box)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Bin/Main.elf",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb-multiarch",
+            "miDebuggerServerAddress": "localhost:3333",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true,
+            "preLaunchTask": "start-esp-usb-jtag-gdbserver-c3",
+            "setupCommands": [
+                {
+                    "description": "Connect to ESP USB JTAG GDB server",
+                    "text": "-target-select remote localhost:3333",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Set architecture riscv:rv32",
+                    "text": "set architecture riscv:rv32",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Reset and halt",
+                    "text": "-interpreter-exec console \"monitor reset halt\"",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable pretty-printing",
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }

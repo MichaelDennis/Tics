@@ -648,6 +648,29 @@ class MsgListClass : public ListClass
 };
 
 //-----------------------------------------------------------------------------
+// DeleteList class.
+//
+// A list of msgs tagged for deletion at the next context switch.
+//-----------------------------------------------------------------------------
+class DeleteListClass : public ListClass
+{
+  public:
+    // Data
+    enum
+    {
+        // Always keep the "n" newest msgs in the list. Used as a flight recorder.
+        // When the Flush function is called it deletes all msgs except the
+        // newest "n" msgs. So, for example, if MinNumMsgsToKeep = 16, and
+        // NumNodesInList = 20, Flush() will delete the 4 msgs at the front of
+        // the list only.
+        DefaultNumMsgsToKeep = 16
+    };
+
+    //
+    int NumMsgsToKeep = 0;
+};
+
+//-----------------------------------------------------------------------------
 // Task List class.
 //
 // A list of all tasks currently in the system.
@@ -1150,7 +1173,8 @@ class NodeHeaderClass : public TicsBaseClass
     bool SignatureMatches();
 
     // Returns true if the arg points to the proper memory pool. Note: Tics
-    // uses only one pool for memory mgmt, so in a sense, this function is not really needed.
+    // uses only one pool for memory mgmt, so in a sense, this function is
+    // not really needed.
     bool MemMgrMatches(MemMgrClass *memMgrPool);
 };
 
