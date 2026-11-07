@@ -1,9 +1,11 @@
 {
     "configurations": [
         {
-            "name": "Linux-m32",
+            "name": "x86_32 (Native)",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/Source",
+                "${workspaceFolder}/**",
+                "/usr/include"
             ],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c11",
@@ -11,20 +13,69 @@
             "intelliSenseMode": "linux-gcc-x86",
             "compilerArgs": [
                 "-m32"
-            ],
-            "defines": [
-                "_REENTRANT"
             ]
         },
         {
-            "name": "RISC-V 32-bit",
+            "name": "RISC-V32 (Virt)",
             "includePath": [
+                "${workspaceFolder}/Source",
                 "${workspaceFolder}/**"
             ],
-            "compilerPath": "riscv64-unknown-elf-g++",
+            "compilerPath": "/usr/bin/riscv64-unknown-elf-g++",
             "cStandard": "c11",
             "cppStandard": "c++11",
-            "intelliSenseMode": "linux-gcc-x86"
+            "intelliSenseMode": "linux-gcc-riscv32",
+            "compilerArgs": [
+                "-march=rv32imac_zicsr",
+                "-mabi=ilp32"
+            ]
+        },
+        {
+            "name": "ARM32 MPS2-AN385 (QEMU)",
+            "includePath": [
+                "${workspaceFolder}/Source",
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "/usr/bin/arm-none-eabi-g++",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-arm",
+            "compilerArgs": [
+                "-mcpu=cortex-m3",
+                "-mthumb"
+            ]
+        },
+        {
+            "name": "ARM32 Nucleo-F401RE (Real)",
+            "includePath": [
+                "${workspaceFolder}/Source",
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "/usr/bin/arm-none-eabi-g++",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-arm",
+            "compilerArgs": [
+                "-mcpu=cortex-m4",
+                "-mthumb",
+                "-mfpu=fpv4-sp-d16",
+                "-mfloat-abi=hard"
+            ]
+        },
+        {
+            "name": "RISC-V32 ESP32-C3 (Real)",
+            "includePath": [
+                "${workspaceFolder}/Source",
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "/usr/bin/riscv32-esp-elf-g++",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-riscv32",
+            "compilerArgs": [
+                "-march=rv32imc",
+                "-mabi=ilp32"
+            ]
         }
     ],
     "version": 4
