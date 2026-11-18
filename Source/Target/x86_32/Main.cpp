@@ -92,6 +92,8 @@ using namespace TicsNameSpace;
 //
 // A separate section will be added later to explain how task switching works.
 //-----------------------------------------------------------------------------
+// mdm
+DummyTaskClass *DummyTask;
 
 //-----------------------------------------------------------------------------
 // Define the Hello Task class - you must inherit from TaskClass and
@@ -137,8 +139,12 @@ void HelloTaskClass::Task(void)
 //-----------------------------------------------------------------------------
 int main()
 {
+    // Startup.
+    DummyTask = new DummyTaskClass("DummyTask");
+    StartupTaskClass *StartupTask = new StartupTaskClass("StartupTask");
+
     // Create the hello task.
-    HelloTask = new HelloTaskClass("Hello");
+    HelloTask = new HelloTaskClass("HelloTask");
 
     // Start tasking.
     Suspend();

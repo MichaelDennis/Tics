@@ -243,12 +243,12 @@ enum MsgNumEnum
 //-----------------------------------------------------------------------------
 // Valid msg number range
 //-----------------------------------------------------------------------------
-enum
+enum ValidMsgNumEnum
 {
-    // Minimum allowed msg number.
+    // Minimum allowed msg number for all msgs, including system msgs.
     MinMsgNum = 0,
 
-    // Maximum allowed msg number.
+    // Maximum allowed msg number for all msgs, including system msgs.
     MaxMsgNum = 50000
 };
 
@@ -409,6 +409,8 @@ class TicsBaseClass
 
     // Overrides operator delete for all subclasses.
     static void operator delete(void *p);
+
+    // MDM bool InSafeMode() {return }
 };
 
 //-----------------------------------------------------------------------------
@@ -474,24 +476,24 @@ class FlagsClass : public TicsBaseClass
     // Data
 
     // Each bit of this integer represents a flag.
-    int Flags;
+    unsigned int FlagBits;
 
     // Functions
 
     // FlagsClass constructor. All flags are initialized to 0.
-    FlagsClass(int flags = 0) : Flags(flags) {}
+    FlagsClass(unsigned int flags = 0) : FlagBits(flags) {}
 
     // Set one or more flags with a mask.
-    void Set(int mask) { Flags |= mask; }
+    void Set(unsigned int mask) { FlagBits |= mask; }
 
-    // Clear one or more flags with a mask.
-    void Clr(int mask) { Flags &= (~mask); }
+    // Clear one or more FlagBits with a mask.
+    void Clr(unsigned int mask) { FlagBits &= (~mask); }
 
-    // Check if one or more flags are set.
-    bool IsSet(int mask) { return Flags & mask; }
+    // Check if one or more mask bits are set in FlagBits.
+    bool IsSet(unsigned int mask) { return FlagBits & mask; }
 
-    // Check if one or more flags are clear.
-    bool IsClr(int mask) { return IsSet(mask) ? false : true; }
+    // Check if one or more mask bits are clear in FlagBits.
+    bool IsClr(unsigned int mask) { return ~FlagBits & mask; }
 };
 
 //-----------------------------------------------------------------------------
@@ -737,7 +739,7 @@ class StackClass : public TicsBaseClass
         DefaultStackSizeInBytes = (1024 * 3),
 
         // The pad is a warning area at the end of stack memory.
-        DefaultStackPadSizeInBytes = 1024,
+        DefaultStackPadSizeInBytes = 32,
 
         // The stack must be at least this large.
         MinStackSizeInBytes = (1024 * 2),
@@ -873,6 +875,29 @@ class FifoClass : public TicsBaseClass
     void Reset();
 };
 
+/* MDM
+class ConfigClass
+{
+    bool DropUnexpectedMsgs = false;
+    bool ScheduleTaskOnCreationFlag = true;
+    bool pumpOn = false;
+    // ...
+
+  public:
+    void MotorOn() { motorOn = true; }
+    void MotorOff() { motorOn = false; }
+    bool MotorIsOn() { return motorOn; }
+
+    void ValveOpen() { valveOpen = true; }
+    void ValveClosed() { valveOpen = false; }
+    bool ValveIsOpen() { return valveOpen; }
+
+    void PumpOn() { pumpOn = true; }
+    void PumpOff() { pumpOn = false; }
+    bool PumpIsOn() { return pumpOn; }
+};
+*/
+
 //-----------------------------------------------------------------------------
 // TaskClass
 //
@@ -883,23 +908,30 @@ class TaskClass : public NodeClass
   public:
     // Data
 
-    enum TaskClassEnum
+    enum GeneralEnum
     {
-        // Flags
+        // The default numTicks used in the Pause() member function when no arg is provided.
+        DefaultNumTicks = 1000
+    };
 
+    //----------------------------------------------------------------
+    // These are flag masks and are used to set flags in the Flags
+    // member variable of this class (TaskClass). The FlagsClass
+    // has member functions to set, clear, and test the flags.
+    // See the FlagsClass for details.
+    //----------------------------------------------------------------
+    enum FlagsEnum
+    {
         // If set, unexpected msgs are dropped. For example, if the task is waiting for msg a
         // but receives msg b, msg b is dropped, otherwise, it stays in the task's MsgList.
         DropUnexpectedMsgsFlag = 1,
 
-        // If set, a task will be scheduled to run, (added to the ReadyList),
+        // If set, a task will not be scheduled to run, (added to the ReadyList),
         // when it is created.
-        ScheduleTaskOnCreationFlag = 2,
+        DoNotScheduleTaskOnCreationFlag = 2,
 
-        // Set to indicate that this is a system task (a task created and used by Tics).
+        // If set, this task is a system task.
         SystemTaskFlag = 4,
-
-        // The default numTicks used in the Pause() member function when no arg is provided.
-        DefaultNumTicks = 1000
     };
 
     // Optional task name.
@@ -921,15 +953,17 @@ class TaskClass : public NodeClass
     // Functions
 
     // Constructor
-    TaskClass(const char *Name = 0, int Priority = MediumPriority,
-              int Flags = (ScheduleTaskOnCreationFlag),
+    TaskClass(const char *Name = 0, int Priority = MediumPriority, unsigned int Flags = 0,
               int StackSizeInBytes = StackClass::DefaultStackSizeInBytes);
 
     // TaskClass destructor
     ~TaskClass();
 
-    // Returns true if task is a system task.
-    bool IsSystemTask(TaskClass *task) { return Flags.IsSet(SystemTaskFlag); }
+    // Returns true if this is a system task.
+    bool IsASystemTask() { return Flags.IsSet(SystemTaskFlag); }
+
+    // Check for stack overflow or underflow.
+    void CheckStack() { Stack.Check(); }
 
     // Checks stack size.
     bool StackSizeIsValid(int stackSizeInBytes);
@@ -1053,10 +1087,7 @@ class StartupTaskClass : public TaskClass
     // Functions
 
     // Constructor.
-    StartupTaskClass(const char *name = 0, int priority = StartupTaskPriority)
-        : TaskClass(name, priority)
-    {
-    }
+    StartupTaskClass(const char *name = 0) : TaskClass(name, StartupTaskPriority, SystemTaskFlag) {}
 
     // Task function.
     void Task();
@@ -1068,7 +1099,7 @@ class StartupTaskClass : public TaskClass
 // When we switch to the StartupTask on startup, the context switching code
 // requires a currently running task whose context must be saved. The
 // DummyTask serves this purpose. Note that the DummyTask sets the
-// ScheduleTaskOnCreationFlag to 0, which means that the DummyTask is not
+// DoNotScheduleTaskOnCreationFlag to 1, which means that the DummyTask is not
 // inserted into the ReadyList on startup. This is necessary because if
 // we schedule it to run on startup, then when it is pulled out of the ReadyList
 // to run, it will need a CurrentTask to perform the task switch to the
@@ -1083,12 +1114,9 @@ class DummyTaskClass : public TaskClass
   public:
     // Functions
 
-    // Constructor.
-    DummyTaskClass(const char *name = 0, int priority = DummyTaskPriority,
-                   int flags = SystemTaskFlag)
-        : TaskClass(name, priority, flags)
-    {
-    }
+    // Constructor. // MDM Moved constructor to Tics.cpp.
+
+    DummyTaskClass(const char *name = 0);
 
     // Task function.
     void Task();
@@ -1128,11 +1156,20 @@ class TicsSystemTaskClass : public TaskClass
     // Functions
 
     // Constructor
-    TicsSystemTaskClass()
-        : TaskClass(0, SystemTaskPriority, (DropUnexpectedMsgsFlag | SystemTaskFlag)) {};
+    TicsSystemTaskClass(const char *name)
+        : TaskClass(name, SystemTaskPriority, (DropUnexpectedMsgsFlag | SystemTaskFlag)) {};
 
     // The task.
     void Task();
+};
+
+class TicsClass
+{
+  public:
+    // Data
+
+    // Functions
+    void Reset();
 };
 
 //-----------------------------------------------------------------------------

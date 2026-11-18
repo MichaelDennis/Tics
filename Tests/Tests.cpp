@@ -31,7 +31,7 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include "Tests.hpp"
+// MDM #include "Tests.hpp"
 #include "Tics.hpp"
 #include <iostream>
 
@@ -130,7 +130,7 @@ int main()
     TicsSystemTask.Send(TestTask, StartMsg);
 
     // Start tasking.
-    Suspend();
+    cd Suspend();
 
     // We will never get here.
     return 0;

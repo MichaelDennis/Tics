@@ -16,6 +16,7 @@
 			"addi",
 			"cdecl",
 			"compatability",
+			"mgmt",
 			"movl",
 			"popl",
 			"pushl",

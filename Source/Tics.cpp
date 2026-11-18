@@ -1,26 +1,26 @@
 /*
-MIT License
+ MIT License
 
-Copyright (c) 2026 Michael Dennis McDonnell
+ Copyright (c) 2026 Michael Dennis McDonnell
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files(the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions :
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files(the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions :
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+ */
 
 //-----------------------------------------------------------------------------
 //
@@ -37,6 +37,8 @@ SOFTWARE.
 //-----------------------------------------------------------------------------
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
+
+extern DummyTaskClass *DummyTask;
 
 //-----------------------------------------------------------------------------
 // Start TicsNameSpace
@@ -85,16 +87,9 @@ DelayListClass DelayList;
 // Tic deletes every msg in the DeleteList.
 ListClass DeleteList;
 
-// A task that Tics maintains for its own use.
-TicsSystemTaskClass TicsSystemTask;
-
 // Pointer to the task that will be running after a context switch. CurrentTask is
 // set to NextTask immediately after the context switch.
 TaskClass *NextTask = 0;
-
-// This task runs when no other tasks are ready to run (it's priority is lower than any user or
-// system task).
-IdleTaskClass IdleTask("IdleTask");
 
 // Isr's and external CPUs schedule tasks to run by adding them to this fifo.
 FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
@@ -102,15 +97,22 @@ FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
+// A task that Tics maintains for its own use.
+TicsSystemTaskClass TicsSystemTask("TicsSystemTask");
+
+// This task runs when no other tasks are ready to run (it's priority is lower than any user or
+// system task).
+IdleTaskClass IdleTask("IdleTask");
+
 // Dummy task used as the CurrentTask when the first task after power-on is run.
-DummyTaskClass DummyTask("DummyTask");
+// MDM DummyTaskClass DummyTask("DummyTask");
 
 // Pointer to the task that is currently running. Initially we point it to a dummy task.
-TaskClass *CurrentTask = &DummyTask;
+TaskClass *CurrentTask = 0; // MDM = &DummyTask;
 
 // The StartupTask is a task that serves as NextTask during the first call
 // to Suspend().
-StartupTaskClass StartupTask("StartupTask");
+// MDM StartupTaskClass StartupTask("StartupTask");
 
 //-----------------------------------------------------------------------------
 /// \brief StackClass constructor. Allocates stack space and defines the stack
@@ -227,28 +229,36 @@ void StackClass::Check(void)
     // Convert to an integer.
     uintptr_t StackTopValue = (uintptr_t)StackTop;
 
-    // Check if the stack pointer is out of allowable range.
-    if (currentSpValue < StackBottomValue)
+    // The DummyTask is the first task to check, but since the
+    // sp when the CurrentTask is the DummyTask is actually the
+    // system task sp used in main(), so we skip the stack checks
+    // i that case.
+    if (CurrentTask != DummyTask)
     {
-        ErrorHandler.Report(ErrorCurrentSpIsBelowStackBottom);
-    }
+        // Check if the sp has moved below the bottom of the stack.
+        if (currentSpValue < StackBottomValue)
+        {
+            ErrorHandler.Report(ErrorCurrentSpIsBelowStackBottom);
+        }
 
-    // Note: Initially the Sp is set to StackTop + 1, which is a valid value
-    // because the first valid stack operation will be a push, which means the
-    // the first value written to the stack will be written to StackTop.
+        // Check if the sp is above the top of the stack.
+        // Note: Initially the sp is set to StackTop + 1, which is a valid value
+        // because the first valid stack operation will be a push, which means the
+        // the first value written to the stack will be written to StackTop.
+        else if (currentSpValue > (StackTopValue + 1))
+        {
+            ErrorHandler.Report(ErrorCurrentSpIsAboveStackTop);
+        }
 
-    else if (currentSpValue > (StackTopValue + 1))
-    {
-        ErrorHandler.Report(ErrorCurrentSpIsAboveStackTop);
-    }
+        // Compute the size of the unused stack area.
+        unusedStackSizeInBytes = (currentSp - StackBottom) * (int)sizeof(StackType);
 
-    // Compute the size of the unused stack area.
-    unusedStackSizeInBytes = (currentSp - StackBottom) * (int)sizeof(StackType);
-
-    // Check to see if the stack pointer is in the pad area.
-    if (unusedStackSizeInBytes < StackPadSizeInBytes)
-    {
-        ErrorHandler.Report(ErrorStackOverFlow);
+        // Check to see if the stack pointer is in the pad area.
+        if (unusedStackSizeInBytes < StackPadSizeInBytes)
+        {
+            StackType *ptr = StackBottom;
+            ErrorHandler.Report(ErrorStackOverFlow);
+        }
     }
 
     // If the forbidden stack area has been written to, then report an error.
@@ -281,6 +291,9 @@ void TaskClass::Suspend(void)
 {
     MsgClass *msg;
 
+    // Check for stack problems.
+    CheckStack();
+
     // Delete msgs that have already been processed by tasks.
     if (DeleteList.IsNotEmpty())
     {
@@ -298,6 +311,8 @@ void TaskClass::Suspend(void)
 
         // Get the next task to run.
         NextTask = msg->Receiver;
+
+        // Check the next task for validity;
 
         // Make sure that the receiver task is a non-null pointer.
         if (NextTask == 0)
@@ -549,6 +564,9 @@ void ListClass::AddByPriority(NodeClass *a)
     NodeClass *b;
     int aPriority;
     int bPriority;
+
+    // Check for list integrity.
+    CheckListIntegrity();
 
     // Get the priority. of the node to add.
     aPriority = a->Priority;
@@ -841,8 +859,8 @@ bool TaskListClass::TaskExists(TaskClass *task, int id)
             // A pointer match has been found. Now check for an id number match.
             if (id == 0)
             {
-                // The id has not been specified, (0 means it is not specified) so ignore it. Match
-                // found.
+                // The id has not been specified, (0 means it is not specified) so ignore it.
+                // Match found.
                 return true;
             }
             else if (tempTask->Id == id)
@@ -1044,8 +1062,8 @@ void TaskListClass::RemoveTaskReferences(TaskClass *task, bool removeTheTaskItse
     NodeClass *node;
     TaskClass *tempTask;
 
-    // For each task in the Task List, remove from its msg list all occurrences of task (the arg to
-    // this function).
+    // For each task in the Task List, remove from its msg list all occurrences of task (the arg
+    // to this function).
     for (node = Head->Next; node != Tail; node = node->Next)
     {
         // The node is actually a task object, so make the conversion.
@@ -1170,7 +1188,7 @@ void Suspend()
 {
     // Suspend the current task, and run the next task in the Ready List.
     // In other words, do a context switch. Only call this function from main().
-    // The CurrentTask is StartupTask when Suspend() is invoked from main(). Note also,
+    // The CurrentTask is DummyTask when Suspend() is invoked from main(). Note also,
     // that the TaskClass has a member function named Suspend() which is different
     // from this version.
     CurrentTask->Suspend();
@@ -1186,8 +1204,8 @@ void Suspend()
 /// \param flags - Various flag settings. Flag bits are OR'ed into Flags.
 /// The DropUnexpectedMsgsFlag means that if a task is waiting for msgA, and
 /// it receives msgB, then msgB is dropped, rather than keeping msgB in
-/// the task's msg list. The ScheduleTaskOnCreationFlag means that a ScheduleMsg
-/// will be sent to the task on creation, which means that the task will be put
+/// the task's msg list. The DoNotScheduleTaskOnCreationFlag means that a ScheduleMsg
+/// will not be sent to the task on creation, which means that the task will be put
 /// into the ReadyList on creation (this is the default). This forces the task
 /// to run at startup time.
 ///
@@ -1197,7 +1215,7 @@ void Suspend()
 /// Note: All the parameters are defaulted. See the definition of the
 /// TaskClass constructor in Tics.hpp.
 //-----------------------------------------------------------------------------
-TaskClass::TaskClass(const char *name, int priority, int flags, int stackSizeInBytes)
+TaskClass::TaskClass(const char *name, int priority, unsigned int flags, int stackSizeInBytes)
     : Name(name), Priority(priority), Flags(flags), Stack(stackSizeInBytes)
 {
     // If the priority is not valid...
@@ -1209,13 +1227,13 @@ TaskClass::TaskClass(const char *name, int priority, int flags, int stackSizeInB
     // Add the task to the list of active tasks.
     TaskList.Add(this);
 
-    // Prime the stack. Fake out the task's "previous" call to TaskSwitch(). See PrimeStack() for
-    // details. Note that the first time "resuming" the task, there is no previous task context that
-    // was saved. So we fake it out by pushing data onto the stack.
+    // Prime the stack. Fake out the task's "previous" call to TaskSwitch(). See PrimeStack()
+    // for details. Note that the first time "resuming" the task, there is no previous task
+    // context that was saved. So we fake it out by pushing data onto the stack.
     Stack.PrimeStack();
 
     // Schedule this task if we're allowed to do so.
-    if (Flags.IsSet(ScheduleTaskOnCreationFlag))
+    if (Flags.IsClr(DoNotScheduleTaskOnCreationFlag))
     {
         Schedule(this);
     }
@@ -1241,7 +1259,7 @@ TaskClass::~TaskClass()
     }
 
     // You can't delete system tasks - they're an integral part of Tics.
-    if (this == &TicsSystemTask || this == &IdleTask || this == &DummyTask || this == &StartupTask)
+    if (IsASystemTask())
     {
         ErrorHandler.Report(ErrorAttemptToDeleteASystemTask);
     }
@@ -1361,12 +1379,13 @@ MsgClass *TaskClass::Recv(int msgNum)
             // Remove the found msg from the msg list.
             MsgList.Remove(msg);
 
-            // Add the msg to the delete list, which means that the msg will be deleted on the next
-            // Suspend() call. It will survive until the task relinquishes control by waiting for
-            // a msg, for example.
+            // Add the msg to the delete list, which means that the msg will be deleted on the
+            // next Suspend() call. It will survive until the task relinquishes control by
+            // waiting for a msg, for example.
             DeleteList.Add(msg);
 
-            // Return a pointer to the msg. The msg will be valid until the current task suspends.
+            // Return a pointer to the msg. The msg will be valid until the current task
+            // suspends.
             return msg;
         }
         else
@@ -2401,7 +2420,8 @@ void *MemMgrClass::Allocate(int numBytesRequested)
     // Try to allocate from a list first, since it's faster and preserves free memory space.
     if ((node = AllocateFromList(numBytesRequested)) != 0)
     {
-        // We need to preserve the node header, so the user's free space begins below the header.
+        // We need to preserve the node header, so the user's free space begins below the
+        // header.
         return node->UserArea();
     }
     else if (TicsFlags.IsSet(DynamicMemoryAllocationNotAllowedFlag))
@@ -2707,6 +2727,7 @@ void TicsBaseClass::operator delete(void *p)
 /// \brief TicsBaseClass constructor.
 ///
 /// \param p - A pointer to the allocated space.
+
 //-----------------------------------------------------------------------------
 TicsBaseClass::TicsBaseClass()
 {
@@ -2783,8 +2804,8 @@ bool StackClass::StackSizeIsValid(int stackSizeInBytes)
 //-----------------------------------------------------------------------------
 bool TaskClass::UserPriorityIsValid(int priority)
 {
-    // If this is the IdleTask, then skip the user level check.
-    if (this == &IdleTask && priority == IdleTaskPriority)
+    // If this is a system task, then return.
+    if (IsASystemTask())
     {
         return true;
     }
@@ -2896,7 +2917,6 @@ int ModularSubtract(uintptr_t a, uintptr_t b, uintptr_t modulus)
 ///
 /// \return Returns the adjusted byte count.
 //-----------------------------------------------------------------------------
-
 unsigned int RoundUpToSizeofInt(unsigned int numBytes)
 {
     unsigned int adjustedByteCount;
@@ -2912,6 +2932,28 @@ unsigned int RoundUpToSizeofInt(unsigned int numBytes)
     return adjustedByteCount;
 }
 
+//-----------------------------------------------------------------------------
+/// \brief Dummy task used as the CurrentTask when the first task after
+/// power-on is run.
+///
+/// When Tics first comes up, there is a task switch to the StartupTask. When
+/// a task switch occurs, the currently running task's registers must be
+/// saved before switching to a new task. The problem is, when the system
+/// powers up there is no CurrentTask running, so even though the DummyTask
+/// is not actually running, it can serve as the CurrentTask so that its
+/// registers can be saved on its stack, after which the StartupTask can run.
+/// The DummyTask never runs again. Its only purpose is to be the CurrentTask
+/// when Tics starts up because the task switching code assumes a CurrentTask.
+/// THis allows the StartupTask to be switched in.
+//-----------------------------------------------------------------------------
+DummyTaskClass::DummyTaskClass(const char *name)
+    : TaskClass(name, DummyTaskPriority, (DoNotScheduleTaskOnCreationFlag | SystemTaskFlag))
+{
+    // Define the CurrentTask so the task switch to StartupTask can happen.
+    CurrentTask = this;
+}
+
+void TicsClass::Reset() {}
 //-----------------------------------------------------------------------------
 /// End namespace TicsNameSpace
 //-----------------------------------------------------------------------------
