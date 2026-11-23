@@ -38,8 +38,6 @@
 // Globals, externs, and statics.
 //-----------------------------------------------------------------------------
 
-extern DummyTaskClass *DummyTask;
-
 //-----------------------------------------------------------------------------
 // Start TicsNameSpace
 //-----------------------------------------------------------------------------
@@ -65,7 +63,7 @@ int MemMgrSpace[SizeMemMgr / sizeof(int)];
 MemMgrClass MemMgr(MemMgrSpace, SizeMemMgr);
 
 // Various flags used by Tics. See Tics.hpp for flag definitions.
-FlagsClass TicsFlags(0);
+FlagsClass TicsFlags(SafeModeFlag);
 
 // List of tasks waiting to run. Actually it's a list of msgs which include a pointer to
 // the task that the msg is destined for which is the task that will run when the msg
@@ -87,6 +85,9 @@ DelayListClass DelayList;
 // Tic deletes every msg in the DeleteList.
 ListClass DeleteList;
 
+// List of user reset functions.
+ListClass UserResetList;
+
 // Pointer to the task that will be running after a context switch. CurrentTask is
 // set to NextTask immediately after the context switch.
 TaskClass *NextTask = 0;
@@ -97,22 +98,21 @@ FifoClass InterfaceFifo((int)sizeof(TaskClass *), NumInterfaceFifoSlots);
 // All errors are handled by calling ErrorHandler.Report().
 ErrorHandlerClass ErrorHandler;
 
+// Acts as the CurrentTask at startup, since there is no real running task at startup.
+DummyTaskClass DummyTask("DummyTask");
+
+// The first running task. Performs target hardware initializations.
+StartupTaskClass StartupTask("StartupTask");
+
+// Pointer to the task that is currently running. Initially we point it to a dummy task.
+TaskClass *CurrentTask = &DummyTask;
+
 // A task that Tics maintains for its own use.
 TicsSystemTaskClass TicsSystemTask("TicsSystemTask");
 
 // This task runs when no other tasks are ready to run (it's priority is lower than any user or
 // system task).
 IdleTaskClass IdleTask("IdleTask");
-
-// Dummy task used as the CurrentTask when the first task after power-on is run.
-// MDM DummyTaskClass DummyTask("DummyTask");
-
-// Pointer to the task that is currently running. Initially we point it to a dummy task.
-TaskClass *CurrentTask = 0; // MDM = &DummyTask;
-
-// The StartupTask is a task that serves as NextTask during the first call
-// to Suspend().
-// MDM StartupTaskClass StartupTask("StartupTask");
 
 //-----------------------------------------------------------------------------
 /// \brief StackClass constructor. Allocates stack space and defines the stack
@@ -217,6 +217,12 @@ void StackClass::Check(void)
     int stackPadSizeInWords = (StackPadSizeInBytes / (int)sizeof(StackType));
     int unusedStackSizeInBytes;
 
+    // Return if safe mode is off.
+    if (SafeModeIsOff())
+    {
+        return;
+    }
+
     // Read the current CPU stack pointer.
     currentSp = (StackType *)GetTaskStackPointer();
 
@@ -233,7 +239,7 @@ void StackClass::Check(void)
     // sp when the CurrentTask is the DummyTask is actually the
     // system task sp used in main(), so we skip the stack checks
     // i that case.
-    if (CurrentTask != DummyTask)
+    if (CurrentTask != &DummyTask)
     {
         // Check if the sp has moved below the bottom of the stack.
         if (currentSpValue < StackBottomValue)
@@ -290,9 +296,6 @@ void TaskListClass::Add(TaskClass *task)
 void TaskClass::Suspend(void)
 {
     MsgClass *msg;
-
-    // Check for stack problems.
-    CheckStack();
 
     // Delete msgs that have already been processed by tasks.
     if (DeleteList.IsNotEmpty())
@@ -1571,6 +1574,7 @@ bool TaskClass::Cancel(MsgClass *msg, int id)
     {
         return true;
     }
+
     // Check the Delay List.
     else if (DelayList.Delete(id))
     {
@@ -1733,6 +1737,12 @@ MsgClass::~MsgClass()
 //-----------------------------------------------------------------------------
 void MsgClass::CheckParameters()
 {
+    // Return if we are not in Safe Mode.
+    if (SafeModeIsOff())
+    {
+        return;
+    }
+
     // If the Priority is not within a valid range...
     if (!InRange(MinPriority, MaxPriority, Priority))
     {
@@ -1856,9 +1866,6 @@ bool TaskClass::TaskExists(TaskClass *task)
 //-----------------------------------------------------------------------------
 void DummyTaskClass::Task()
 {
-    // Initialize the target hardware.
-    TargetInit();
-
     while (true)
     {
         // Wait for any msg, then let the garbage collector drop it.
@@ -1867,20 +1874,79 @@ void DummyTaskClass::Task()
 }
 
 //-----------------------------------------------------------------------------
-/// \brief The StartupTask.
+// Define the Hello Task class - you must inherit from TaskClass and
+// implement the virtual function "Task".
+//-----------------------------------------------------------------------------
+class HelloTaskClass : public TaskClass
+{
+  public:
+    // Functions
+
+    HelloTaskClass(const char *name) : TaskClass(name) {}
+    void Task();
+};
+
+//-----------------------------------------------------------------------------
+// Pointer the hello task. Used in main() to create the hello task.
+//-----------------------------------------------------------------------------
+HelloTaskClass *HelloTask;
+
+//-----------------------------------------------------------------------------
+// Implement the Hello Task function.
+//-----------------------------------------------------------------------------
+void HelloTaskClass::Task(void)
+{
+    volatile int i = 0;
+
+    // The task body is always an infinite loop.
+    while (true)
+    {
+        // Output the string followed by a counter value.
+        // MDM cout << "Hello World! " << i << endl;
+
+        // Sleep for one second.
+        Pause(1000);
+
+        // Bump the counter.
+        i++;
+    }
+}
+
+//-----------------------------------------------------------------------------
+// Create HelloTask and start tasking.
+//-----------------------------------------------------------------------------
+int MyMain()
+{
+    // Create the hello task.
+    HelloTask = new HelloTaskClass("HelloTask");
+
+    // Start tasking.
+    Suspend();
+
+    // We will never get here.
+    return 0;
+}
+
+//-----------------------------------------------------------------------------
+/// \brief The StartupTask ia the first task to run after power-on.
 ///
 /// This task serves as the NextTask so that the very first context switch
 // will have a NextTask to refer to.
 //-----------------------------------------------------------------------------
 void StartupTaskClass::Task()
 {
+    // Drop unexpected msgs.
+    Flags.FlagBits |= DropUnexpectedMsgsFlag;
+
+    // Initialize target hardware.
+    TargetInit();
+
+    MyMain();
+
     while (true)
     {
-        // Initialize target hardware.
-        TargetInit();
-
-        // Wait for any msg, then let the garbage collector drop it.
-        Wait();
+        // Msgs should never be sent to this task, and if they are, they will be dropped.
+        Wait(NullMsg);
     }
 }
 
@@ -2554,6 +2620,33 @@ void MemMgrClass::DeAllocate(void *p)
 }
 
 //-----------------------------------------------------------------------------
+/// \brief Erase the entire memory space.
+///
+/// \param p - A pointer to the memory block, not including the header.
+///
+/// Note: We assume that the memory is an array of 32-bit words.
+//-----------------------------------------------------------------------------
+void MemMgrClass::Erase(void)
+{
+    int numWords;
+
+    // Make sure memory is made up of 32-bit words.
+    if (MemorySizeInBytes & 0x3 != 0)
+    {
+        ErrorHandler.Report(ErrorMemoryNotInWords);
+    }
+
+    // Compute the number of words in the memory array.
+    numWords = MemorySizeInBytes / sizeof(int);
+
+    // Fill the memory array with zeros.
+    for (int i = 0; i < numWords; i++)
+    {
+        MemoryStart[i] = 0;
+    }
+}
+
+//-----------------------------------------------------------------------------
 /// \brief Memory block manager constructor.
 ///
 /// \param memoryStart - A pointer to the space to be used for memory block allocation.
@@ -2563,6 +2656,7 @@ MemMgrClass::MemMgrClass(void *memoryStart, int memorySizeInBytes)
     : MemoryStart((char *)memoryStart), MemoryEnd(((char *)memoryStart + memorySizeInBytes) - 1),
       CurrentOffset(0), MemorySizeInBytes(memorySizeInBytes), NumBytesAvailable(memorySizeInBytes)
 {
+    int temp = memorySizeInBytes;
 }
 
 //-----------------------------------------------------------------------------
@@ -2572,6 +2666,12 @@ void ListClass::CheckListIntegrity(void)
 {
     int loopCounter = 0;
     NodeClass *node;
+
+    // Do not check if we are not in Safe Mode.
+    if (SafeModeIsOff())
+    {
+        return;
+    }
 
     // Check head and tail pointers.
     if (Head != &ActualHead || Tail != &ActualTail)
@@ -2623,6 +2723,12 @@ void ListClass::CheckListIntegrity(void)
 //-----------------------------------------------------------------------------
 void ListClass::DoInsertSafetyChecks(NodeClass *a, NodeClass *b)
 {
+    // Return if safe mode is off.
+    if (SafeModeIsOff())
+    {
+        return;
+    }
+
     // Both msgs must be defined.
     if (a == 0 || b == 0)
     {
@@ -2734,6 +2840,14 @@ TicsBaseClass::TicsBaseClass()
     // Object Id starts at 1. Zero is used to indicate that the Id has
     // not been assigned.
     Id = ++IdCounter;
+
+    // The DummyTask acts as the CurrentTask at startup time. It is not actually running.
+    // We just need a shell to save the CurrentTask's (i.e. the DummyTask) context into.
+    // DummyTask = new DummyTaskClass("DummyTask");
+
+    // The StartupTask is the first task to run after power-on. It performs
+    // initialization of Target hardware.
+    // StartupTask = new StartupTaskClass("StartupTask");
 }
 
 // TicsBaseClass destructor.
@@ -2753,7 +2867,7 @@ TicsBaseClass::~TicsBaseClass()
 ///
 /// Note: The memMgrPool arg and the memMgrPool member variable in
 /// NodeHeaderClass are artifacts from a time when we were considering
-/// allowing for multiple memory pools. They should be removed. MDM
+/// allowing for multiple memory pools.
 //-----------------------------------------------------------------------------
 void NodeHeaderClass::Initialize(int numBytesRequested, MemMgrClass *memMgrPool)
 {
@@ -2769,7 +2883,6 @@ void NodeHeaderClass::Initialize(int numBytesRequested, MemMgrClass *memMgrPool)
 /// \param memMgrPool The memory‑manager pointer to compare.
 ///
 /// \return true if the pointers match; otherwise false.
-/// MDM - Remove this function. we only have one memory pool.
 //-----------------------------------------------------------------------------
 bool NodeHeaderClass::MemMgrMatches(MemMgrClass *memMgrPool)
 {
@@ -2854,6 +2967,20 @@ TaskClass *TaskListClass::GetTaskPointer(const char *name)
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
+/// \brief Safe Mode off check function
+///
+/// \returns true if Safe Mode is off, false otherwise.
+//-----------------------------------------------------------------------------
+bool SafeModeIsOff() { return TicsFlags.IsClr(SafeModeFlag); }
+
+//-----------------------------------------------------------------------------
+/// \brief Safe Mode on check function
+///
+/// \returns true if Safe Mode is on, false otherwise.
+//-----------------------------------------------------------------------------
+bool SafeModeIsOn() { return TicsFlags.IsSet(SafeModeFlag); }
+
+//-----------------------------------------------------------------------------
 /// A task is started by pushing its start address onto its stack, and popping
 /// it off the stack when it is its turn to run. However, since each stack slot
 /// can hold only one word, an address like MyTask->Task() will not fit, since
@@ -2933,7 +3060,7 @@ unsigned int RoundUpToSizeofInt(unsigned int numBytes)
 }
 
 //-----------------------------------------------------------------------------
-/// \brief Dummy task used as the CurrentTask when the first task after
+/// \brief Dummy task used as the CurrentTask when the first task switch after
 /// power-on is run.
 ///
 /// When Tics first comes up, there is a task switch to the StartupTask. When
@@ -2953,7 +3080,6 @@ DummyTaskClass::DummyTaskClass(const char *name)
     CurrentTask = this;
 }
 
-void TicsClass::Reset() {}
 //-----------------------------------------------------------------------------
 /// End namespace TicsNameSpace
 //-----------------------------------------------------------------------------

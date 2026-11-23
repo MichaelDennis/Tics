@@ -40,10 +40,6 @@ SOFTWARE.
 #include <stdlib.h>
 
 //-----------------------------------------------------------------------------
-// Typedefs
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
 /// Start TicsNameSpace.
 ///
 /// Enclose almost the entire header file in the TicsNameSpace.
@@ -57,6 +53,9 @@ typedef unsigned int StackType;
 // The timer counter element type.
 typedef unsigned int TimerTickType;
 
+// A pointer to a user startup function.
+typedef void (*UserResetType)();
+
 //-----------------------------------------------------------------------------
 /// ASM Externals
 //-----------------------------------------------------------------------------
@@ -68,6 +67,11 @@ extern "C" void TaskSwitch(void **currentTaskSavedSp, void *newTaskSavedSp);
 extern "C" TimerTickType GetSystemTickCount();
 
 //-----------------------------------------------------------------------------
+// Function prototypes
+//-----------------------------------------------------------------------------
+bool SafeModeIsOff();
+
+//-----------------------------------------------------------------------------
 // Forward class declarations
 //-----------------------------------------------------------------------------
 class TaskClass;
@@ -76,6 +80,8 @@ class MemNodeClass;
 class MemMgrClass;
 class ContextSwitchX86GppClass;
 class TicsSystemTaskClass;
+class DummyTaskClass;
+class StartupTaskClass;
 
 //-----------------------------------------------------------------------------
 /// C++ Externals
@@ -139,7 +145,7 @@ enum TicsNamespaceEnum
     // Tics system flags. Thee flags apply to all tasks.
     //---------------------------------------------------------------------------
 
-    // When set, this flag performs extra checking. Unused. Tics performs extra checking already.
+    // When set, this flag performs extra checking.
     SafeModeFlag = 1,
 
     // When set, the WatchDogTimer flag is checked at each context switch. Unused.
@@ -373,6 +379,7 @@ enum ErrorMsgEnum
     ErrorListNodeCountMismatch = 1098,
     ErrorMsgNumIsOutOfRange = 1099,
     ErrorInvalidFifoSlotSize = 1100,
+    ErrorMemoryNotInWords = 1101,
 };
 
 //-----------------------------------------------------------------------------
@@ -517,9 +524,6 @@ class MsgClass : public NodeClass
 
     /// The message number indicating the action requested of the receiver.
     int MsgNum;
-
-    /// Optional generic pointer for user usage. //MDM Maybe we remove this.
-    void *Ptr;
 
     /// Delay in system ticks before the message is delivered (0 = immediate).
     TimerTickType Delay;
@@ -736,7 +740,7 @@ class StackClass : public TicsBaseClass
     enum StackClassEnum
     {
         // Default stack size.
-        DefaultStackSizeInBytes = (1024 * 3),
+        DefaultStackSizeInBytes = (1024 * 2),
 
         // The pad is a warning area at the end of stack memory.
         DefaultStackPadSizeInBytes = 32,
@@ -874,29 +878,6 @@ class FifoClass : public TicsBaseClass
     // Resets the front and rear pointers.
     void Reset();
 };
-
-/* MDM
-class ConfigClass
-{
-    bool DropUnexpectedMsgs = false;
-    bool ScheduleTaskOnCreationFlag = true;
-    bool pumpOn = false;
-    // ...
-
-  public:
-    void MotorOn() { motorOn = true; }
-    void MotorOff() { motorOn = false; }
-    bool MotorIsOn() { return motorOn; }
-
-    void ValveOpen() { valveOpen = true; }
-    void ValveClosed() { valveOpen = false; }
-    bool ValveIsOpen() { return valveOpen; }
-
-    void PumpOn() { pumpOn = true; }
-    void PumpOff() { pumpOn = false; }
-    bool PumpIsOn() { return pumpOn; }
-};
-*/
 
 //-----------------------------------------------------------------------------
 // TaskClass
@@ -1114,8 +1095,7 @@ class DummyTaskClass : public TaskClass
   public:
     // Functions
 
-    // Constructor. // MDM Moved constructor to Tics.cpp.
-
+    // Constructor.
     DummyTaskClass(const char *name = 0);
 
     // Task function.
@@ -1132,12 +1112,6 @@ class ErrorHandlerClass : public TicsBaseClass
   public:
     // Data
 
-    enum FlagsEnum
-    {
-
-    };
-
-    FlagsClass Flags;
     volatile int SavedErrorNum;
 
     // Functions
@@ -1161,15 +1135,6 @@ class TicsSystemTaskClass : public TaskClass
 
     // The task.
     void Task();
-};
-
-class TicsClass
-{
-  public:
-    // Data
-
-    // Functions
-    void Reset();
 };
 
 //-----------------------------------------------------------------------------
@@ -1209,9 +1174,8 @@ class NodeHeaderClass : public TicsBaseClass
     // Returns true if the Signature member variable contains the correct signature.
     bool SignatureMatches();
 
-    // Returns true if the arg points to the proper memory pool. Note: Tics
-    // uses only one pool for memory mgmt, so in a sense, this function is
-    // not really needed.
+    // Returns true if the arg points to the proper memory pool. Tics allows for
+    // more than one memory pool.
     bool MemMgrMatches(MemMgrClass *memMgrPool);
 };
 
@@ -1274,6 +1238,13 @@ class MemNodeListClass : public TicsBaseClass
 
     // Constructor.
     MemNodeListClass()
+    {
+        // Reset everything.
+        Reset();
+    }
+
+    // Reset the memory block list.
+    void Reset()
     {
         Head = 0;
         NumNodesInList = 0;
@@ -1344,6 +1315,80 @@ class MemMgrClass : public TicsBaseClass
 
     // Adds a memory block back into the memory pool.
     void DeAllocate(void *p);
+
+    // Erase all of memory.
+    void Erase(void);
+};
+
+//-----------------------------------------------------------------------------
+// UserResetClass
+//
+// A member of a linked list of user reset functions. Users can have any
+// number of reset functions. For example, a user might have a normal reset
+// function that is called at startup to create tasks and perform
+// initializations. Another might be a minimal, scaled down version of his
+// application that can be started up in case of a catastrophic failure
+// occurs to at least keep the system running at a reduced level.
+//-----------------------------------------------------------------------------
+class UserResetClass : public NodeClass
+{
+  public:
+    // Data
+
+    // IdNum is a user chosen number used to identify the Reset function.
+    // When the user calls the Reset function he also specifies which number
+    // reset function to use.
+    int IdNum;
+
+    // A pointer to a function to call at startup to perform task creation and
+    // general initializations or during runtime, typically
+    // after experiencing an unrecoverable error. If zero, it is assumed
+    // that the user will do his task creations and initializations in
+    // main() or a function called by main().
+    UserResetType UserReset;
+
+    // Functions
+    UserResetClass()
+    {
+        // Zero to ID number.
+        IdNum = 0;
+
+        // Zero the reset function pointer.
+        UserReset = 0;
+    }
+};
+
+//-----------------------------------------------------------------------------
+// UserReset list class.
+//
+// A list of user reset functions.
+//-----------------------------------------------------------------------------
+class UserResetListClass : public ListClass
+{
+  public:
+    // Data
+
+    // Functions
+    void AddUserReset(UserResetClass *userReset) { Add((NodeClass *)userReset); }
+};
+
+//-----------------------------------------------------------------------------
+// ResetMgrTaskClass
+//
+// Manages the resetting of all user tasks, data, and Tics system data.
+// THe user calls this function to reset the entire system.
+//-----------------------------------------------------------------------------
+class ResetMgrTaskClass
+{
+  public:
+    // Data
+    UserResetListClass UserResetList;
+
+    // Functions
+
+    // THe user calls this function to reset the entire system, and
+    // restart with the
+    void Reset(void);
 };
 
 //-----------------------------------------------------------------------------
